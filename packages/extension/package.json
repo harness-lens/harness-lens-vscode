@@ -1,0 +1,61 @@
+{
+  "name": "harness-lens",
+  "displayName": "Harness Lens",
+  "version": "0.0.1",
+  "publisher": "harness-lens",
+  "description": "Discover and inspect coding-agent harness files in the current workspace.",
+  "private": true,
+  "license": "SEE LICENSE IN LICENSE",
+  "engines": {
+    "vscode": "^1.104.0"
+  },
+  "categories": [
+    "Linters",
+    "Other"
+  ],
+  "keywords": [
+    "agents",
+    "harness",
+    "instructions"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "main": "./dist/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    },
+    "virtualWorkspaces": {
+      "supported": true
+    }
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "harnessLens.scanWorkspace",
+        "title": "Scan Workspace",
+        "category": "Harness Lens"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node20 --sourcemap",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "package": "npm run build && vsce package --no-dependencies --out ../../artifacts/harness-lens.vsix",
+    "vscode:prepublish": "npm run build",
+    "watch": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node20 --sourcemap --watch"
+  },
+  "dependencies": {
+    "@harness-lens/vscode": "0.0.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/harness-lens/harness-lens-vscode",
+    "directory": "packages/extension"
+  },
+  "homepage": "https://github.com/harness-lens/harness-lens-vscode#readme",
+  "bugs": {
+    "url": "https://github.com/harness-lens/harness-lens-vscode/issues"
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "name": "@harness-lens/vscode",
+  "version": "0.0.1",
+  "description": "Harness-file discovery APIs for HarnessLens VS Code integrations.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "prepack": "npm run build",
+    "test": "node --test --experimental-strip-types test/*.test.ts"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/harness-lens/harness-lens-vscode",
+    "directory": "packages/vscode"
+  },
+  "homepage": "https://github.com/harness-lens/harness-lens-vscode#readme",
+  "bugs": {
+    "url": "https://github.com/harness-lens/harness-lens-vscode/issues"
+  },
+  "keywords": [
+    "agents",
+    "harness",
+    "vscode"
+  ],
+  "author": "Cristian Camargo Filho",
+  "license": "BSD-3-Clause"
+}

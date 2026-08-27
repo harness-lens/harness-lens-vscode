@@ -1,0 +1,37 @@
+{
+  "name": "harness-lens-vscode-workspace",
+  "version": "0.0.1",
+  "private": true,
+  "description": "VS Code integration workspace for HarnessLens.",
+  "license": "BSD-3-Clause",
+  "packageManager": "npm@11.16.0",
+  "engines": {
+    "node": ">=22.14.0",
+    "npm": ">=11.5.1"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "artifacts": "node -e \"require('node:fs').mkdirSync('artifacts', { recursive: true })\"",
+    "build": "npm run build --workspace @harness-lens/vscode && npm run build --workspace packages/extension",
+    "check": "npm run check --workspace @harness-lens/vscode && npm run build --workspace @harness-lens/vscode && npm run check --workspace packages/extension && npm run version:check",
+    "package": "npm run build && npm run pack:npm && npm run package:extension",
+    "package:extension": "npm run artifacts && npm run package --workspace packages/extension",
+    "pack:npm": "npm run artifacts && npm pack --workspace @harness-lens/vscode --pack-destination artifacts",
+    "test": "npm run test --workspace @harness-lens/vscode",
+    "version:check": "node scripts/check-versions.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.0",
+    "@types/vscode": "1.104.0",
+    "@vscode/vsce": "^3.9.2",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "@vscode/vsce-sign@2.1.0": true,
+    "keytar": false
+  }
+}
