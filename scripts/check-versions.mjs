@@ -16,7 +16,8 @@ if (versions.size !== 1) {
 }
 
 const tag = process.env.GITHUB_REF_NAME;
-if (tag) {
+const isVersionTag = tag && /^v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(tag);
+if (isVersionTag) {
   const tagVersion = tag.startsWith("v") ? tag.slice(1) : tag;
   if (tagVersion !== root.version) {
     throw new Error(`Tag ${tag} does not match package version ${root.version}`);
