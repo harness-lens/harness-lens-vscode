@@ -1,3 +1,6 @@
+> SPDX-License-Identifier: MPL-2.0
+> Copyright © 2026 Cristian Camargo Filho
+
 # Harness Lens for VS Code
 
 Sibling repository for HarnessLens editor integration and reusable VS Code-facing discovery package.
@@ -55,4 +58,8 @@ See [publishing setup](docs/publishing.md) and [ecosystem plan](docs/ecosystem.m
 
 ## License
 
-BSD 3-Clause. See [LICENSE](LICENSE).
+Early namespace-reservation versions used BSD-3-Clause. The official functional
+implementation is licensed under MPL-2.0. When Covered Software is distributed,
+modified MPL-covered files must remain available in Source Code Form under the
+license. See [LICENSING](LICENSING.md), [COPYRIGHT](COPYRIGHT), and
+[TRADEMARKS](TRADEMARKS).
