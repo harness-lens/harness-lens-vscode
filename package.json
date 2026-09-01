@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "description": "VS Code integration workspace for HarnessLens.",
-  "license": "BSD-3-Clause",
+  "license": "MPL-2.0",
   "packageManager": "npm@11.16.0",
   "engines": {
     "node": ">=22.14.0",

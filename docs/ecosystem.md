@@ -1,3 +1,6 @@
+> SPDX-License-Identifier: MPL-2.0
+> Copyright © 2026 Cristian Camargo Filho
+
 # HarnessLens ecosystem
 
 HarnessLens should share one detection and validation model across every interface. UI targets should adapt shared results rather than reimplement rules.

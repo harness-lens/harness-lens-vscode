@@ -5,7 +5,7 @@
   "publisher": "harness-lens",
   "description": "Discover and inspect coding-agent harness files in the current workspace.",
   "private": true,
-  "license": "SEE LICENSE IN LICENSE",
+  "license": "MPL-2.0",
   "engines": {
     "vscode": "^1.104.0"
   },
