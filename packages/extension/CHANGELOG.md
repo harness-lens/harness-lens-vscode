@@ -3,6 +3,12 @@
 
 # Changelog
 
+## 0.0.2
+
+- Mark the Marketplace extension as an early preview.
+- Clarify the features available today and the features not yet implemented.
+- Remove the linter category until validation is available.
+
 ## 0.0.1
 
 - Add workspace harness discovery command.

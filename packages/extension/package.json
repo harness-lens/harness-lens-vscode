@@ -1,16 +1,16 @@
 {
   "name": "harness-lens",
   "displayName": "Harness Lens",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "harness-lens",
-  "description": "Discover and inspect coding-agent harness files in the current workspace.",
+  "description": "Early preview: discover and open coding-agent harness files in VS Code.",
+  "preview": true,
   "private": true,
   "license": "MPL-2.0",
   "engines": {
     "vscode": "^1.104.0"
   },
   "categories": [
-    "Linters",
     "Other"
   ],
   "keywords": [
@@ -47,7 +47,7 @@
     "watch": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node20 --sourcemap --watch"
   },
   "dependencies": {
-    "@harness-lens/vscode": "0.0.1"
+    "@harness-lens/vscode": "0.0.2"
   },
   "repository": {
     "type": "git",

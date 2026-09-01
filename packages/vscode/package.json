@@ -1,6 +1,6 @@
 {
   "name": "@harness-lens/vscode",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Harness-file discovery APIs for HarnessLens VS Code integrations.",
   "type": "module",
   "main": "./dist/index.js",
