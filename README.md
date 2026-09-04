@@ -5,9 +5,8 @@
 
 Sibling repository for HarnessLens editor integration and reusable VS Code-facing discovery package.
 
-> **Status:** early preview. The Marketplace extension currently provides file
-> discovery and navigation only. It does not yet provide validation,
-> diagnostics, metrics, or language-server features.
+> **Status:** early preview. The Marketplace extension provides discovery,
+> navigation, and a client for the external Rust language server.
 
 ## Published identities
 
@@ -35,7 +34,29 @@ harness-lens-vscode/
 
 ## Current behavior
 
-The npm package discovers supported agent harness files from Node.js. The VS Code extension adds **Harness Lens: Scan Workspace**, displays discovered file count in the status bar, and opens selected harness files.
+The npm package discovers supported agent harness files from Node.js. The VS Code
+extension adds **Harness Lens: Scan Workspace**, displays discovered file count,
+opens selected harness files, and starts `harness-lens-lsp` when a harness file
+is present. Standard diagnostics are compatible with VS Code's Problems view and
+extensions such as Error Lens.
+
+Install the server from a checkout of the
+[`language-server`](https://github.com/harness-lens/language-server) repository:
+
+```bash
+cargo install --path rust
+```
+
+If it is not on `PATH`, set `harnessLens.languageServer.path` to its absolute
+location. Server execution is disabled in untrusted and virtual workspaces.
+
+## Ecosystem
+
+- [Core](https://github.com/harness-lens/core)
+- [SDK](https://github.com/harness-lens/sdk)
+- [CLI](https://github.com/harness-lens/cli)
+- [Language Server](https://github.com/harness-lens/language-server)
+- [Project hub](https://github.com/harness-lens/harness-lens)
 
 Supported files:
 

@@ -3,7 +3,7 @@
   "displayName": "Harness Lens",
   "version": "0.0.2",
   "publisher": "harness-lens",
-  "description": "Early preview: discover and open coding-agent harness files in VS Code.",
+  "description": "Discover and analyze coding-agent harness files with the Harness Lens language server.",
   "preview": true,
   "private": true,
   "license": "MPL-2.0",
@@ -21,6 +21,9 @@
   "extensionKind": [
     "workspace"
   ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./dist/extension.js",
   "capabilities": {
     "untrustedWorkspaces": {
@@ -36,8 +39,37 @@
         "command": "harnessLens.scanWorkspace",
         "title": "Scan Workspace",
         "category": "Harness Lens"
+      },
+      {
+        "command": "harnessLens.restartLanguageServer",
+        "title": "Restart Language Server",
+        "category": "Harness Lens"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Harness Lens",
+      "properties": {
+        "harnessLens.languageServer.enabled": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "description": "Start the Harness Lens language server when harness files are present."
+        },
+        "harnessLens.languageServer.path": {
+          "type": "string",
+          "default": "harness-lens-lsp",
+          "scope": "machine",
+          "description": "Path to the harness-lens-lsp executable."
+        },
+        "harnessLens.languageServer.arguments": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "scope": "machine",
+          "description": "Additional arguments passed to the language server."
+        }
+      }
+    }
   },
   "scripts": {
     "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node20 --sourcemap",
@@ -47,7 +79,8 @@
     "watch": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node20 --sourcemap --watch"
   },
   "dependencies": {
-    "@harness-lens/vscode": "0.0.2"
+    "@harness-lens/vscode": "0.0.2",
+    "vscode-languageclient": "^10.1.1"
   },
   "repository": {
     "type": "git",

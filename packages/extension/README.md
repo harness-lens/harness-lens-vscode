@@ -5,9 +5,9 @@
 
 > **Early preview**
 >
-> This release only discovers and opens supported coding-agent harness files.
-> Validation, diagnostics, metrics, and language-server integration are not
-> available yet. Do not rely on this preview as a policy or compliance gate.
+> This release discovers supported coding-agent harness files and connects to
+> the external `harness-lens-lsp` reference server. Do not rely on this preview
+> as a policy or compliance gate.
 
 Harness Lens is an early VS Code integration for coding-agent instruction files.
 
@@ -16,13 +16,23 @@ Harness Lens is an early VS Code integration for coding-agent instruction files.
 - Discover supported harness files in the current workspace.
 - Show the detected file count in the status bar.
 - Select a discovered file from a quick picker and open it in the editor.
+- Publish deterministic repetition and heuristic incongruence diagnostics from
+  the Rust language server.
+- Interoperate with the Problems view and Error Lens through standard LSP
+  diagnostics.
 
 ## Not available yet
 
-- Instruction validation or policy findings.
-- Editor diagnostics, code actions, or automatic fixes.
+- Code actions or automatic fixes.
 - Metrics, historical comparisons, or effectiveness analysis.
-- Live language-server integration.
+
+## Language server
+
+Install `harness-lens-lsp` from the
+[language-server repository](https://github.com/harness-lens/language-server),
+or set `harnessLens.languageServer.path` to an existing binary. The extension
+starts it only for trusted, filesystem-backed workspaces containing harness
+files. Use **Harness Lens: Restart Language Server** after changing the binary.
 
 ## Use the preview
 
