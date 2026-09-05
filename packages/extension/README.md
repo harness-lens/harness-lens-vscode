@@ -20,11 +20,18 @@ Harness Lens is an early VS Code integration for coding-agent instruction files.
   the Rust language server.
 - Interoperate with the Problems view and Error Lens through standard LSP
   diagnostics.
+- Browse files, findings, cost, and coverage from the Harness Lens Activity Bar.
+- Open a metrics center with per-file context/cost, score methods, plugin
+  execution, and up to 100 local content-free history snapshots per workspace.
+- Classify complete-report changes as improving, stable, degrading, or
+  insufficient evidence using an explicit deterministic delta method.
 
 ## Not available yet
 
 - Code actions or automatic fixes.
-- Metrics, historical comparisons, or effectiveness analysis.
+- Attributed per-file effectiveness.
+- Tool-call error, retry, timeout, or cost history until the provider-neutral
+  sanitized runtime trace contract is available.
 
 ## Language server
 
@@ -33,10 +40,15 @@ Install `harness-lens-lsp` from the
 or set `harnessLens.languageServer.path` to an existing binary. The extension
 starts it only for trusted, filesystem-backed workspaces containing harness
 files. Use **Harness Lens: Restart Language Server** after changing the binary.
+The metrics center requires a server supporting
+`harnessLens/workspaceReport`; older servers continue to provide standard
+diagnostics but cannot populate the dashboard.
 
 ## Use the preview
 
-Run **Harness Lens: Scan Workspace** from the Command Palette. Select any result to open it. The status bar shows the current detected file count.
+Select the Harness Lens Activity Bar icon or run **Harness Lens: Open Metrics
+Center**. Use **Harness Lens: Scan Workspace** for the quick picker. The status
+bar shows the current detected file count.
 
 Supported files:
 

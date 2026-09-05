@@ -3,6 +3,15 @@
 
 # Changelog
 
+## Unreleased
+
+- Add Harness Lens Activity Bar workspace observability tree.
+- Add content-safe metrics center backed by language-server workspace reports.
+- Add per-file context, configured cost, findings, provenance, and navigation.
+- Add local report history and deterministic improvement/degradation states.
+- Keep runtime tool-call cost and per-file effectiveness explicitly unmeasured
+  until attributed evidence is available.
+
 ## 0.0.2
 
 - Mark the Marketplace extension as an early preview.

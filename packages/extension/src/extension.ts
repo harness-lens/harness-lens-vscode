@@ -11,6 +11,7 @@ import {
   type LanguageClientOptions,
   type ServerOptions,
 } from "vscode-languageclient/node";
+import { ObservabilityCenter } from "./center.js";
 
 const harnessDocumentPatterns = [
   "**/AGENTS.md",
@@ -31,6 +32,7 @@ const harnessDocumentPatterns = [
   "**/.cursor/rules/**",
 ] as const;
 const excludePattern = "{**/.git/**,**/.venv/**,**/build/**,**/dist/**,**/node_modules/**,**/venv/**}";
+const workspaceReportMethod = "harnessLens/workspaceReport";
 
 interface WorkspaceHarnessFile {
   kind: HarnessKind;
@@ -173,7 +175,7 @@ export function activate(context: vscode.ExtensionContext): Readonly<{
     return files;
   };
 
-  const command = vscode.commands.registerCommand("harnessLens.scanWorkspace", async () => {
+  const scanCommand = vscode.commands.registerCommand("harnessLens.scanWorkspace", async () => {
     const files = await refreshStatus();
     if (files.length === 0) {
       await vscode.window.showInformationMessage("Harness Lens found no harness files in this workspace.");
@@ -196,12 +198,35 @@ export function activate(context: vscode.ExtensionContext): Readonly<{
     }
   });
 
+  const observability = new ObservabilityCenter(context, async (folder) => {
+    await ensureLanguageServer(context);
+    if (!languageClient) {
+      throw new Error("Language server is disabled, unavailable, or workspace is not trusted.");
+    }
+    return languageClient.sendRequest(workspaceReportMethod, {
+      rootUri: folder.uri.toString(),
+    });
+  });
+  const openCenter = vscode.commands.registerCommand(
+    "harnessLens.openCenter",
+    () => observability.show(),
+  );
+  const refreshObservability = vscode.commands.registerCommand(
+    "harnessLens.refreshObservability",
+    () => observability.refresh(true),
+  );
+  const openSource = vscode.commands.registerCommand(
+    "harnessLens.openSource",
+    (target: { path: string; line?: number }) => observability.openSource(target),
+  );
+
   const restart = vscode.commands.registerCommand(
     "harnessLens.restartLanguageServer",
     async () => {
       await stopLanguageServer();
       serverFailureReported = false;
       await ensureLanguageServer(context);
+      await observability.refresh(false);
     },
   );
 
@@ -226,7 +251,7 @@ export function activate(context: vscode.ExtensionContext): Readonly<{
   const refreshForFileChange = (): void => {
     void refreshStatus().then((files) => {
       if (files.length > 0) {
-        return ensureLanguageServer(context);
+        return ensureLanguageServer(context).then(() => observability.refresh(false));
       }
       return undefined;
     });
@@ -237,17 +262,21 @@ export function activate(context: vscode.ExtensionContext): Readonly<{
   }
 
   context.subscriptions.push(
-    command,
+    scanCommand,
+    openCenter,
+    refreshObservability,
+    openSource,
     restart,
     documents,
     trust,
     configuration,
     ...harnessFiles,
+    observability,
     status,
   );
   void refreshStatus().then((files) => {
     if (files.length > 0) {
-      return ensureLanguageServer(context);
+      return ensureLanguageServer(context).then(() => observability.refresh(false));
     }
     return undefined;
   });

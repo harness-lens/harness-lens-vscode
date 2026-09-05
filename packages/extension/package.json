@@ -44,8 +44,57 @@
         "command": "harnessLens.restartLanguageServer",
         "title": "Restart Language Server",
         "category": "Harness Lens"
+      },
+      {
+        "command": "harnessLens.openCenter",
+        "title": "Open Metrics Center",
+        "category": "Harness Lens",
+        "icon": "$(dashboard)"
+      },
+      {
+        "command": "harnessLens.refreshObservability",
+        "title": "Refresh Workspace Report",
+        "category": "Harness Lens",
+        "icon": "$(refresh)"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "harnessLens",
+          "title": "Harness Lens",
+          "icon": "media/harness-lens.svg"
+        }
+      ]
+    },
+    "views": {
+      "harnessLens": [
+        {
+          "id": "harnessLens.observability",
+          "name": "Workspace Observability"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "harnessLens.observability",
+        "contents": "Inspect harness cost, quality, provenance, and history.\n[Open Metrics Center](command:harnessLens.openCenter)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "harnessLens.openCenter",
+          "when": "view == harnessLens.observability",
+          "group": "navigation@1"
+        },
+        {
+          "command": "harnessLens.refreshObservability",
+          "when": "view == harnessLens.observability",
+          "group": "navigation@2"
+        }
+      ]
+    },
     "configuration": {
       "title": "Harness Lens",
       "properties": {
@@ -75,6 +124,7 @@
     "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node20 --sourcemap",
     "check": "tsc --noEmit -p tsconfig.json",
     "package": "npm run build && vsce package --no-dependencies --out ../../artifacts/harness-lens.vsix",
+    "test": "esbuild test/*.test.ts --bundle --platform=node --format=cjs --outdir=.test-build && node --test .test-build/*.test.js",
     "vscode:prepublish": "npm run build --workspace @harness-lens/vscode && npm run build",
     "watch": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node20 --sourcemap --watch"
   },
