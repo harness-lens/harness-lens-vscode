@@ -75,7 +75,7 @@
     "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node20 --sourcemap",
     "check": "tsc --noEmit -p tsconfig.json",
     "package": "npm run build && vsce package --no-dependencies --out ../../artifacts/harness-lens.vsix",
-    "vscode:prepublish": "npm run build",
+    "vscode:prepublish": "npm run build --workspace @harness-lens/vscode && npm run build",
     "watch": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node20 --sourcemap --watch"
   },
   "dependencies": {
