@@ -50,6 +50,9 @@ Supported files:
 - Codex config, agents, and rules under `.codex/`
 - compatible rules under `.agents/rules/` and `.cursor/rules/`
 
+See the repository's [manual installation guide](../../docs/manual-installation.md)
+for Windows, WSL, native language-server, VSIX, and CLI setup.
+
 Feedback and bug reports are welcome in the [Harness Lens VS Code repository](https://github.com/harness-lens/harness-lens-vscode/issues).
 
 ## License

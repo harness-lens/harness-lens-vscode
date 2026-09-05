@@ -70,6 +70,9 @@ Supported files:
 - Codex config, agents, and rules under `.codex/`
 - compatible rules under `.agents/rules/` and `.cursor/rules/`
 
+See the [manual installation guide](docs/manual-installation.md) for Windows,
+WSL, native language-server, VSIX, and CLI setup.
+
 ## Development
 
 ```bash
