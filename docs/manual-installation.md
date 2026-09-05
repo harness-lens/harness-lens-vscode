@@ -45,7 +45,7 @@ Close VS Code, or stop the running server before replacing its executable:
 cd D:\git\repos\language-server
 git fetch origin
 git switch build/sdk-agent-assets
-git pull --ff-only origin build/sdk-agent-assets
+git pull --ff-only origin main
 
 Get-Process harness-lens-lsp -ErrorAction SilentlyContinue |
   Stop-Process -Force
@@ -80,7 +80,7 @@ harness-lens-lsp --help
 cd D:\git\repos\harness-lens-vscode
 git fetch origin
 git switch feat/agent-asset-discovery
-git pull --ff-only origin feat/agent-asset-discovery
+git pull --ff-only origin main
 npm ci
 npm run package:extension
 code --install-extension .\artifacts\harness-lens.vsix --force
@@ -121,7 +121,7 @@ The CLI is installed from the CLI repository with the same private root:
 cd D:\git\repos\cli
 git fetch origin
 git switch build/sdk-agent-assets
-git pull --ff-only origin build/sdk-agent-assets
+git pull --ff-only origin main
 
 $installRoot = Join-Path $env:USERPROFILE ".harness-lens"
 cargo install --locked --force --path .\rust --root $installRoot
