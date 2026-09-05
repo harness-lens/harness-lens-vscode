@@ -38,7 +38,13 @@ The npm package discovers supported agent harness files from Node.js. The VS Cod
 extension adds **Harness Lens: Scan Workspace**, displays discovered file count,
 opens selected harness files, and starts `harness-lens-lsp` when a harness file
 is present. Standard diagnostics are compatible with VS Code's Problems view and
-extensions such as Error Lens.
+extensions such as Error Lens. Its Activity Bar view and metrics center expose
+content-safe workspace reports, per-file context and configured input cost,
+findings, score methods, plugin execution, and local comparison history.
+
+File effectiveness and tool-call runtime stay visibly unmeasured until
+sanitized attributed runtime evidence is available. Static token-cost estimates
+are never presented as observed model or tool spend.
 
 Install the server from a checkout of the
 [`language-server`](https://github.com/harness-lens/language-server) repository:

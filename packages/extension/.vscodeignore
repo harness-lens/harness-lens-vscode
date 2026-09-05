@@ -1,7 +1,9 @@
 .github/**
+.test-build/**
 .vscode/**
 node_modules/**
 src/**
+test/**
 tsconfig.json
 **/*.map
 *.vsix

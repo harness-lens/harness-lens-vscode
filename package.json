@@ -19,7 +19,7 @@
     "package": "npm run build && npm run pack:npm && npm run package:extension",
     "package:extension": "npm run build --workspace @harness-lens/vscode && npm run artifacts && npm run package --workspace packages/extension",
     "pack:npm": "npm run artifacts && npm pack --workspace @harness-lens/vscode --pack-destination artifacts",
-    "test": "npm run test --workspace @harness-lens/vscode",
+    "test": "npm run test --workspace @harness-lens/vscode && npm run test --workspace packages/extension",
     "version:check": "node scripts/check-versions.mjs"
   },
   "devDependencies": {
