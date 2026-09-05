@@ -22,7 +22,7 @@ Use these branches for the current preview source builds:
 | --- | --- |
 | Core | `feat/exact-duplicate-evaluation` |
 | CLI | `build/sdk-agent-assets` |
-| Language server | `build/sdk-agent-assets` |
+| Language server | `fix/windows-related-uris` (native `HL032` and Windows source links) |
 | VS Code | `main` (packaging fixes are merged) |
 
 In a checkout where the branch already exists, run `git switch BRANCH`; do not
@@ -51,7 +51,7 @@ $projectPath = "D:\git\repos\cli"
 if (-not (Test-Path -LiteralPath $projectPath -PathType Container)) {
   throw "Set projectPath to an existing project directory."
 }
-git clone --branch build/sdk-agent-assets https://github.com/harness-lens/language-server.git "$buildRoot\language-server"
+git clone --branch fix/windows-related-uris https://github.com/harness-lens/language-server.git "$buildRoot\language-server"
 if ($LASTEXITCODE -ne 0) { throw "Language server checkout failed" }
 git clone --branch build/sdk-agent-assets https://github.com/harness-lens/cli.git "$buildRoot\cli"
 if ($LASTEXITCODE -ne 0) { throw "CLI checkout failed" }
@@ -135,6 +135,22 @@ existing JSON object:
 
 Replace `crist` with the Windows account name shown by `$env:USERNAME`.
 
+Check for an existing setting pointing to `.cargo\\bin`: installing under
+`.harness-lens\\bin` does not update that other executable. After restart,
+verify the active path:
+
+```powershell
+Get-Process harness-lens-lsp -ErrorAction SilentlyContinue | Select-Object Id, Path
+Set-Location "$buildRoot\language-server"
+node scripts/smoke-native-lsp.mjs "$installRoot\bin\harness-lens-lsp.exe"
+if ($LASTEXITCODE -ne 0) { throw "Installed LSP duplicate regression failed" }
+```
+
+The regression starts a separate server on a temporary fixture containing two
+copies of `adoption, rejection, assumptions, and source links.`. It checks
+`HL032` warning severity, both locations, normalization evidence, and clearing
+the warning after an unsaved edit. It does not modify your project files.
+
 Then run `Developer: Reload Window`, trust the workspace, and run
 `Harness Lens: Restart Language Server`.
 
@@ -187,10 +203,9 @@ node .\dist\bin.js scan $projectPath `
 ```
 
 This reports `HL032` exact duplicates, source-size/token budgets, and input
-cost per invocation/total. The native Rust CLI and language server use pinned
-SDK revisions; they receive these new fields after the Core → SDK → CLI/LSP
-pins are updated and the binaries are reinstalled. Linking npm Core does not
-change the Rust binaries or editor diagnostics.
+cost per invocation/total. The language-server branch above includes the
+Core/SDK update for native `HL032` warnings. The native CLI branch still uses
+its older SDK pin; linking npm Core does not change either Rust binary.
 
 The price 2.5 per million input tokens and 100 invocations are example inputs,
 not a quoted provider rate or measured usage. Tokens use a character-count
