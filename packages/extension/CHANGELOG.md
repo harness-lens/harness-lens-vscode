@@ -8,6 +8,8 @@
 - Mark the Marketplace extension as an early preview.
 - Clarify the features available today and the features not yet implemented.
 - Remove the linter category until validation is available.
+- Add an external Rust language-server client with configurable binary path.
+- Publish standard diagnostics compatible with Problems and Error Lens.
 
 ## 0.0.1
 

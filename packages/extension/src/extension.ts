@@ -6,6 +6,11 @@ import {
   type HarnessKind,
 } from "@harness-lens/vscode";
 import * as vscode from "vscode";
+import {
+  LanguageClient,
+  type LanguageClientOptions,
+  type ServerOptions,
+} from "vscode-languageclient/node";
 
 const includePattern = "{**/AGENTS.md,**/CLAUDE.md,**/GEMINI.md,**/.github/copilot-instructions.md,**/.cursor/rules/**}";
 const excludePattern = "{**/.git/**,**/.venv/**,**/build/**,**/dist/**,**/node_modules/**,**/venv/**}";
@@ -14,6 +19,10 @@ interface WorkspaceHarnessFile {
   kind: HarnessKind;
   uri: vscode.Uri;
 }
+
+let languageClient: LanguageClient | undefined;
+let languageServerStart: Promise<void> | undefined;
+let serverFailureReported = false;
 
 async function scanWorkspace(): Promise<readonly WorkspaceHarnessFile[]> {
   const uris = await vscode.workspace.findFiles(includePattern, excludePattern);
@@ -33,6 +42,99 @@ function kindLabel(kind: HarnessKind): string {
     "cursor-rule": "Cursor rule",
     gemini: "Gemini",
   }[kind];
+}
+
+function isHarnessDocument(document: vscode.TextDocument): boolean {
+  return document.uri.scheme === "file"
+    && classifyHarnessPath(document.uri.fsPath) !== undefined;
+}
+
+async function stopLanguageServer(): Promise<void> {
+  const client = languageClient;
+  languageClient = undefined;
+  if (client) {
+    await client.stop();
+  }
+}
+
+function ensureLanguageServer(context: vscode.ExtensionContext): Promise<void> {
+  if (languageServerStart) {
+    return languageServerStart;
+  }
+  if (languageClient) {
+    return Promise.resolve();
+  }
+
+  const configuration = vscode.workspace.getConfiguration("harnessLens");
+  if (!configuration.get<boolean>("languageServer.enabled", true)
+      || !vscode.workspace.isTrusted) {
+    return Promise.resolve();
+  }
+
+  const filesystemRoot = vscode.workspace.workspaceFolders
+    ?.find((folder) => folder.uri.scheme === "file");
+  if (!filesystemRoot) {
+    return Promise.resolve();
+  }
+
+  languageServerStart = (async () => {
+    const command = configuration.get<string>(
+      "languageServer.path",
+      "harness-lens-lsp",
+    );
+    const args = configuration.get<readonly string[]>(
+      "languageServer.arguments",
+      [],
+    );
+    const serverOptions: ServerOptions = {
+      command,
+      args: [...args],
+      options: { cwd: filesystemRoot.uri.fsPath },
+    };
+    const clientOptions: LanguageClientOptions = {
+      documentSelector: [
+        { scheme: "file", pattern: "**/AGENTS.md" },
+        { scheme: "file", pattern: "**/CLAUDE.md" },
+        { scheme: "file", pattern: "**/GEMINI.md" },
+        { scheme: "file", pattern: "**/.github/copilot-instructions.md" },
+        { scheme: "file", pattern: "**/.cursor/rules/**" },
+      ],
+      outputChannelName: "Harness Lens Language Server",
+    };
+    const client = new LanguageClient(
+      "harnessLens",
+      "Harness Lens",
+      serverOptions,
+      clientOptions,
+    );
+    languageClient = client;
+    context.subscriptions.push(client);
+
+    try {
+      await client.start();
+      serverFailureReported = false;
+    } catch (error: unknown) {
+      languageClient = undefined;
+      if (!serverFailureReported) {
+        serverFailureReported = true;
+        const detail = error instanceof Error ? error.message : String(error);
+        const action = await vscode.window.showWarningMessage(
+          `Harness Lens could not start ${command}: ${detail}`,
+          "Open Settings",
+        );
+        if (action === "Open Settings") {
+          await vscode.commands.executeCommand(
+            "workbench.action.openSettings",
+            "harnessLens.languageServer.path",
+          );
+        }
+      }
+    }
+  })().finally(() => {
+    languageServerStart = undefined;
+  });
+
+  return languageServerStart;
 }
 
 export function activate(context: vscode.ExtensionContext): Readonly<{
@@ -73,10 +175,61 @@ export function activate(context: vscode.ExtensionContext): Readonly<{
     }
   });
 
-  context.subscriptions.push(command, status);
-  void refreshStatus();
+  const restart = vscode.commands.registerCommand(
+    "harnessLens.restartLanguageServer",
+    async () => {
+      await stopLanguageServer();
+      serverFailureReported = false;
+      await ensureLanguageServer(context);
+    },
+  );
+
+  const documents = vscode.workspace.onDidOpenTextDocument((document) => {
+    if (isHarnessDocument(document)) {
+      void ensureLanguageServer(context);
+    }
+  });
+  const trust = vscode.workspace.onDidGrantWorkspaceTrust(() => {
+    if (vscode.workspace.textDocuments.some(isHarnessDocument)) {
+      void ensureLanguageServer(context);
+    }
+  });
+  const configuration = vscode.workspace.onDidChangeConfiguration((event) => {
+    if (event.affectsConfiguration("harnessLens.languageServer")) {
+      void stopLanguageServer().then(() => ensureLanguageServer(context));
+    }
+  });
+  const harnessFiles = vscode.workspace.createFileSystemWatcher(includePattern);
+  const refreshForFileChange = (): void => {
+    void refreshStatus().then((files) => {
+      if (files.length > 0) {
+        return ensureLanguageServer(context);
+      }
+      return undefined;
+    });
+  };
+  harnessFiles.onDidCreate(refreshForFileChange);
+  harnessFiles.onDidDelete(refreshForFileChange);
+
+  context.subscriptions.push(
+    command,
+    restart,
+    documents,
+    trust,
+    configuration,
+    harnessFiles,
+    status,
+  );
+  void refreshStatus().then((files) => {
+    if (files.length > 0) {
+      return ensureLanguageServer(context);
+    }
+    return undefined;
+  });
 
   return Object.freeze({ scanWorkspace });
 }
 
-export function deactivate(): void {}
+export async function deactivate(): Promise<void> {
+  await stopLanguageServer();
+}
