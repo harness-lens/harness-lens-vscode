@@ -12,7 +12,24 @@ import {
   type ServerOptions,
 } from "vscode-languageclient/node";
 
-const includePattern = "{**/AGENTS.md,**/CLAUDE.md,**/GEMINI.md,**/.github/copilot-instructions.md,**/.cursor/rules/**}";
+const harnessDocumentPatterns = [
+  "**/AGENTS.md",
+  "**/AGENTS.override.md",
+  "**/CLAUDE.md",
+  "**/CLAUDE.local.md",
+  "**/GEMINI.md",
+  "**/SKILL.md",
+  "**/.agents/rules/**/*.{md,mdc,rules}",
+  "**/.claude/agents/**/*.md",
+  "**/.claude/rules/**/*.{md,mdc}",
+  "**/.github/agents/**/*.agent.md",
+  "**/.github/copilot-instructions.md",
+  "**/.github/instructions/**/*.instructions.md",
+  "**/.codex/agents/**/*.toml",
+  "**/.codex/config.toml",
+  "**/.codex/rules/**/*.rules",
+  "**/.cursor/rules/**",
+] as const;
 const excludePattern = "{**/.git/**,**/.venv/**,**/build/**,**/dist/**,**/node_modules/**,**/venv/**}";
 
 interface WorkspaceHarnessFile {
@@ -25,22 +42,29 @@ let languageServerStart: Promise<void> | undefined;
 let serverFailureReported = false;
 
 async function scanWorkspace(): Promise<readonly WorkspaceHarnessFile[]> {
-  const uris = await vscode.workspace.findFiles(includePattern, excludePattern);
-  return uris
-    .map((uri) => ({
-      kind: classifyHarnessPath(vscode.workspace.asRelativePath(uri)) ?? "agents",
-      uri,
-    }))
+  const matches = await Promise.all(
+    harnessDocumentPatterns.map((pattern) => vscode.workspace.findFiles(pattern, excludePattern)),
+  );
+  const uris = new Map(matches.flat().map((uri) => [uri.toString(), uri])).values();
+  return [...uris]
+    .flatMap((uri) => {
+      const kind = classifyHarnessPath(vscode.workspace.asRelativePath(uri));
+      return kind ? [{ kind, uri }] : [];
+    })
     .sort((left, right) => left.uri.path.localeCompare(right.uri.path));
 }
 
 function kindLabel(kind: HarnessKind): string {
   return {
+    agent: "Agent profile",
     agents: "AGENTS",
     claude: "Claude",
+    "codex-config": "Codex config",
     copilot: "Copilot",
     "cursor-rule": "Cursor rule",
     gemini: "Gemini",
+    rule: "Agent rule",
+    skill: "Agent Skill",
   }[kind];
 }
 
@@ -92,13 +116,10 @@ function ensureLanguageServer(context: vscode.ExtensionContext): Promise<void> {
       options: { cwd: filesystemRoot.uri.fsPath },
     };
     const clientOptions: LanguageClientOptions = {
-      documentSelector: [
-        { scheme: "file", pattern: "**/AGENTS.md" },
-        { scheme: "file", pattern: "**/CLAUDE.md" },
-        { scheme: "file", pattern: "**/GEMINI.md" },
-        { scheme: "file", pattern: "**/.github/copilot-instructions.md" },
-        { scheme: "file", pattern: "**/.cursor/rules/**" },
-      ],
+      documentSelector: harnessDocumentPatterns.map((pattern) => ({
+        scheme: "file",
+        pattern,
+      })),
       outputChannelName: "Harness Lens Language Server",
     };
     const client = new LanguageClient(
@@ -199,7 +220,9 @@ export function activate(context: vscode.ExtensionContext): Readonly<{
       void stopLanguageServer().then(() => ensureLanguageServer(context));
     }
   });
-  const harnessFiles = vscode.workspace.createFileSystemWatcher(includePattern);
+  const harnessFiles = harnessDocumentPatterns.map((pattern) =>
+    vscode.workspace.createFileSystemWatcher(pattern)
+  );
   const refreshForFileChange = (): void => {
     void refreshStatus().then((files) => {
       if (files.length > 0) {
@@ -208,8 +231,10 @@ export function activate(context: vscode.ExtensionContext): Readonly<{
       return undefined;
     });
   };
-  harnessFiles.onDidCreate(refreshForFileChange);
-  harnessFiles.onDidDelete(refreshForFileChange);
+  for (const watcher of harnessFiles) {
+    watcher.onDidCreate(refreshForFileChange);
+    watcher.onDidDelete(refreshForFileChange);
+  }
 
   context.subscriptions.push(
     command,
@@ -217,7 +242,7 @@ export function activate(context: vscode.ExtensionContext): Readonly<{
     documents,
     trust,
     configuration,
-    harnessFiles,
+    ...harnessFiles,
     status,
   );
   void refreshStatus().then((files) => {

@@ -61,10 +61,14 @@ location. Server execution is disabled in untrusted and virtual workspaces.
 Supported files:
 
 - `AGENTS.md`
-- `CLAUDE.md`
+- `AGENTS.override.md`
+- `CLAUDE.md` and `CLAUDE.local.md`
 - `GEMINI.md`
-- `.github/copilot-instructions.md`
-- files under `.cursor/rules/`
+- `SKILL.md`, including `.agents/skills/` and `.claude/skills/`
+- GitHub Copilot instructions and `.github/agents/*.agent.md`
+- Claude agents and rules under `.claude/`
+- Codex config, agents, and rules under `.codex/`
+- compatible rules under `.agents/rules/` and `.cursor/rules/`
 
 ## Development
 
