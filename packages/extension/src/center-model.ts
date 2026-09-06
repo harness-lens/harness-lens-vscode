@@ -65,8 +65,8 @@ export interface Metric {
 
 export interface Score {
   id: string;
-  category: string;
-  method: string;
+  category: "quality" | "safety" | "reliability" | "performance";
+  method: "deterministic" | "heuristic" | "statistical" | "probabilistic";
   value: number;
   threshold: number;
   passed: boolean;
@@ -107,13 +107,28 @@ export interface WorkspaceReports {
 export interface RuntimeStatus {
   mode: "off" | "live" | "snapshot";
   state: "off" | "loading" | "ready" | "failed" | "invalid";
-  issue?: string;
+  issue?: RuntimeIssue;
   period: string;
   calls: number;
   sessions: number;
   warningCount: number;
   hasSnapshot: boolean;
 }
+
+export type RuntimeIssue =
+  | "invalid_provider"
+  | "invalid_provider_configuration"
+  | "workspace_blocked"
+  | "invalid_mode"
+  | "invalid_period"
+  | "missing_snapshot_path"
+  | "snapshot_too_large"
+  | "not_found"
+  | "unavailable"
+  | "timeout"
+  | "command_failed"
+  | "invalid_data"
+  | "read_failed";
 
 export interface AssetSummary extends SourceRecord {
   estimatedTokens: number | null;
@@ -169,6 +184,26 @@ function finite(value: unknown, label: string): number {
     throw new Error(`${label} must be a finite number.`);
   }
   return value;
+}
+
+function unitInterval(value: unknown, label: string): number {
+  const parsed = finite(value, label);
+  if (parsed < 0 || parsed > 1) {
+    throw new Error(`${label} must be between 0.0 and 1.0.`);
+  }
+  return parsed;
+}
+
+function nonNegativeInteger(value: unknown, label: string): number {
+  const parsed = finite(value, label);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+    throw new Error(`${label} must be a non-negative safe integer.`);
+  }
+  return parsed;
+}
+
+function optionalNonNegativeInteger(value: unknown, label: string): number | undefined {
+  return value === undefined || value === null ? undefined : nonNegativeInteger(value, label);
 }
 
 function boolean(value: unknown, label: string): boolean {
@@ -288,14 +323,34 @@ function parseMetric(value: unknown): Metric {
 
 function parseScore(value: unknown): Score {
   const score = object(value, "score");
-  const sampleSize = optionalNumber(score.sample_size, "score.sample_size");
+  const category = text(score.category, "score.category");
+  const method = text(score.method, "score.method");
+  if (!["quality", "safety", "reliability", "performance"].includes(category)) {
+    throw new Error(`Unsupported score category: ${category}.`);
+  }
+  if (!["deterministic", "heuristic", "statistical", "probabilistic"].includes(method)) {
+    throw new Error(`Unsupported score method: ${method}.`);
+  }
+  const valueNumber = unitInterval(score.value, "score.value");
+  const threshold = unitInterval(score.threshold, "score.threshold");
+  const passed = boolean(score.passed, "score.passed");
+  const sampleSize = optionalNonNegativeInteger(score.sample_size, "score.sample_size");
+  if (method === "statistical" && sampleSize === undefined) {
+    throw new Error("Statistical score requires score.sample_size.");
+  }
+  if (method === "probabilistic") {
+    throw new Error("Probabilistic score requires a future prior and interval contract.");
+  }
+  if (passed !== (valueNumber >= threshold)) {
+    throw new Error("score.passed must be derived from score.value and score.threshold.");
+  }
   return {
     id: text(score.id, "score.id"),
-    category: text(score.category, "score.category"),
-    method: text(score.method, "score.method"),
-    value: finite(score.value, "score.value"),
-    threshold: finite(score.threshold, "score.threshold"),
-    passed: boolean(score.passed, "score.passed"),
+    category: category as Score["category"],
+    method: method as Score["method"],
+    value: valueNumber,
+    threshold,
+    passed,
     ...(sampleSize === undefined ? {} : { sample_size: sampleSize }),
     reason: text(score.reason, "score.reason"),
     source: text(score.source, "score.source"),
@@ -313,13 +368,20 @@ function parsePlugin(value: unknown): PluginExecution {
   };
 }
 
-function parseReport(value: unknown): AnalysisReport {
+export function parseAnalysisReport(value: unknown): AnalysisReport {
   const report = object(value, "analysis report");
+  const schemaVersion = finite(report.schema_version, "report.schema_version");
+  if (schemaVersion !== 1) {
+    throw new Error(`Unsupported analysis report schema version: ${schemaVersion}.`);
+  }
   const completeness = object(report.completeness, "report.completeness");
   const scoreSummary = object(report.score_summary, "report.score_summary");
   const quality = scoreSummary.quality_mean;
+  const qualityMean = quality === null || quality === undefined
+    ? null
+    : unitInterval(quality, "score_summary.quality_mean");
   return {
-    schema_version: finite(report.schema_version, "report.schema_version"),
+    schema_version: schemaVersion,
     root: text(report.root, "report.root"),
     completeness: {
       complete: boolean(completeness.complete, "report.completeness.complete"),
@@ -340,10 +402,8 @@ function parseReport(value: unknown): AnalysisReport {
     metrics: array(report.metrics, "report.metrics").map(parseMetric),
     scores: array(report.scores, "report.scores").map(parseScore),
     score_summary: {
-      quality_mean: quality === null || quality === undefined
-        ? null
-        : finite(quality, "score_summary.quality_mean"),
-      safety_violations: finite(
+      quality_mean: qualityMean,
+      safety_violations: nonNegativeInteger(
         scoreSummary.safety_violations,
         "score_summary.safety_violations",
       ),
@@ -360,12 +420,12 @@ export function parseWorkspaceReports(value: unknown): WorkspaceReports {
   }
   return {
     schemaVersion,
-    reports: array(envelope.reports, "workspace reports").map(parseReport),
+    reports: array(envelope.reports, "workspace reports").map(parseAnalysisReport),
     runtime: parseRuntimeStatus(envelope.runtime),
   };
 }
 
-function parseRuntimeStatus(value: unknown): RuntimeStatus {
+export function parseRuntimeStatus(value: unknown): RuntimeStatus {
   if (value === undefined || value === null) {
     return {
       mode: "off",
@@ -387,17 +447,36 @@ function parseRuntimeStatus(value: unknown): RuntimeStatus {
     throw new Error(`Unsupported runtime state: ${state}.`);
   }
   const issue = optionalText(runtime.issue, "runtime.issue");
+  if (issue !== undefined && !runtimeIssues.includes(issue as RuntimeIssue)) {
+    throw new Error(`Unsupported runtime issue: ${issue}.`);
+  }
   return {
     mode: mode as RuntimeStatus["mode"],
     state: state as RuntimeStatus["state"],
-    ...(issue === undefined ? {} : { issue }),
+    ...(issue === undefined ? {} : { issue: issue as RuntimeIssue }),
     period: text(runtime.period, "runtime.period"),
-    calls: finite(runtime.calls, "runtime.calls"),
-    sessions: finite(runtime.sessions, "runtime.sessions"),
-    warningCount: finite(runtime.warningCount, "runtime.warningCount"),
+    calls: nonNegativeInteger(runtime.calls, "runtime.calls"),
+    sessions: nonNegativeInteger(runtime.sessions, "runtime.sessions"),
+    warningCount: nonNegativeInteger(runtime.warningCount, "runtime.warningCount"),
     hasSnapshot: boolean(runtime.hasSnapshot, "runtime.hasSnapshot"),
   };
 }
+
+const runtimeIssues: readonly RuntimeIssue[] = [
+  "invalid_provider",
+  "invalid_provider_configuration",
+  "workspace_blocked",
+  "invalid_mode",
+  "invalid_period",
+  "missing_snapshot_path",
+  "snapshot_too_large",
+  "not_found",
+  "unavailable",
+  "timeout",
+  "command_failed",
+  "invalid_data",
+  "read_failed",
+];
 
 function metric(report: AnalysisReport, name: string, path?: string): Metric | undefined {
   return report.metrics.find((candidate) =>

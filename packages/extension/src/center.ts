@@ -10,17 +10,17 @@ import {
   appendSnapshot,
   assetSummaries,
   classifyTrend,
-  parseWorkspaceReports,
   snapshot,
   type AnalysisReport,
   type HistorySnapshot,
   type RuntimeStatus,
+  type WorkspaceReports,
 } from "./center-model.js";
 import { centerHtml, type CenterViewState } from "./center-view.js";
 
 const historyPrefix = "harnessLens.observability.history";
 
-export type ReportRequester = (folder: vscode.WorkspaceFolder) => Promise<unknown>;
+export type ReportRequester = (folder: vscode.WorkspaceFolder) => Promise<WorkspaceReports>;
 
 class ObservationItem extends vscode.TreeItem {
   readonly children: readonly ObservationItem[];
@@ -284,7 +284,7 @@ export class ObservabilityCenter implements vscode.Disposable {
 
     this.folder = folder;
     try {
-      const response = parseWorkspaceReports(await this.requestReport(folder));
+      const response = await this.requestReport(folder);
       const report = response.reports[0];
       if (!report) {
         throw new Error("Language server returned no report for this workspace.");
