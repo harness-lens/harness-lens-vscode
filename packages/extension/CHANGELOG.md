@@ -5,6 +5,17 @@
 
 ## Unreleased
 
+- Add typed provider catalog and aggregate protocol services.
+- Require explicit CodeBurn provider consent in addition to runtime mode.
+- Send workspace trust, virtual-workspace, and selected-provider policy during
+  language-server initialization.
+- Validate active runtime settings locally and fail closed without installing
+  or bundling optional provider software.
+- Scope process-wide runtime consent and mode consistently across multi-root
+  VS Code windows.
+- Reject malformed score ranges, derived pass states, sample sizes, and runtime
+  issue classes at the protocol boundary.
+
 ## 0.0.2
 
 - Add Harness Lens Activity Bar workspace observability tree.

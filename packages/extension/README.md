@@ -26,7 +26,10 @@ Harness Lens is an early VS Code integration for coding-agent instruction files.
 - Classify complete-report changes as improving, stable, degrading, or
   insufficient evidence using an explicit deterministic delta method.
 - Show consent-controlled aggregate runtime status from newer language servers;
-  runtime mode defaults to `off`.
+  provider selection and runtime mode both default to `off` for each VS Code
+  window.
+- Validate schema-versioned provider catalog and aggregate envelopes before
+  using Native or optional-provider status.
 
 ## Not available yet
 
@@ -35,12 +38,18 @@ Harness Lens is an early VS Code integration for coding-agent instruction files.
 - Tool-call error, retry, timeout, or cost history until the provider-neutral
   sanitized runtime trace contract is available.
 
-Runtime evidence defaults to `off`. Choose `live` to run an installed CodeBurn
-executable through the language server, or `snapshot` to read a canonical safe
-aggregate snapshot without process launch. Configure mode, executable, period,
-snapshot path, and report bound under `harnessLens.runtime.*` and
-`harnessLens.report.maxFiles`. CodeBurn is optional and not bundled. Aggregate
-runtime evidence never changes deterministic findings or scores.
+Runtime evidence defaults to `off`, and CodeBurn remains separately disabled for
+the VS Code window. Run **Harness Lens: Enable CodeBurn Provider** to review and
+confirm its local execution boundary. Enabling does not install or launch
+anything. Then choose
+`live` to run a separately installed CodeBurn executable through language
+server, or `snapshot` to read a canonical safe aggregate snapshot without
+process launch. Configure mode, executable, period, snapshot path, and report
+bound under `harnessLens.runtime.*` and `harnessLens.report.maxFiles`; disable
+`harnessLens.providers.codeburn.enabled` to clear optional selection. CodeBurn
+is optional, MIT-licensed, and not bundled. Extension never downloads, installs,
+or updates it. Aggregate runtime evidence never changes deterministic findings
+or scores.
 
 ## Language server
 
@@ -50,8 +59,12 @@ or set `harnessLens.languageServer.path` to an existing binary. The extension
 starts it only for trusted, filesystem-backed workspaces containing harness
 files. Use **Harness Lens: Restart Language Server** after changing the binary.
 The metrics center requires a server supporting
-`harnessLens/workspaceReport`; older servers continue to provide standard
-diagnostics but cannot populate the dashboard.
+`harnessLens/providerAggregate`, introduced by language-server
+[PR #23](https://github.com/harness-lens/language-server/pull/23) and accepted in
+immutable merge
+[`496f288`](https://github.com/harness-lens/language-server/commit/496f28889b40522676c6d7a59a0b9b2d1af8e700).
+Language server stays external rather than becoming bundled build dependency.
+Older servers continue to provide standard diagnostics but cannot populate dashboard.
 
 ## Use the preview
 

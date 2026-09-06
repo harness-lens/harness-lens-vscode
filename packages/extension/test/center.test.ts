@@ -174,6 +174,68 @@ test("rejects an unknown protocol schema", () => {
   );
 });
 
+test("rejects malformed scores and runtime status at the protocol boundary", () => {
+  const invalidScore = (change: Record<string, unknown>): Record<string, unknown> => {
+    const value = structuredClone(report()) as unknown as Record<string, unknown>;
+    value.scores = [{
+      ...(value.scores as Record<string, unknown>[])[0],
+      ...change,
+    }];
+    return value;
+  };
+
+  assert.throws(
+    () => parseWorkspaceReports({ schemaVersion: 1, reports: [invalidScore({ value: 2 })] }),
+    /score.value must be between 0.0 and 1.0/,
+  );
+  assert.throws(
+    () => parseWorkspaceReports({ schemaVersion: 1, reports: [invalidScore({ method: "opaque" })] }),
+    /Unsupported score method/,
+  );
+  assert.throws(
+    () => parseWorkspaceReports({ schemaVersion: 1, reports: [invalidScore({ passed: true })] }),
+    /score.passed must be derived/,
+  );
+  assert.throws(
+    () => parseWorkspaceReports({
+      schemaVersion: 1,
+      reports: [invalidScore({ method: "statistical", sample_size: null })],
+    }),
+    /Statistical score requires/,
+  );
+  assert.throws(
+    () => parseWorkspaceReports({
+      schemaVersion: 1,
+      reports: [invalidScore({ sample_size: -1 })],
+    }),
+    /score.sample_size must be a non-negative safe integer/,
+  );
+
+  const invalidSummary = structuredClone(report()) as unknown as Record<string, unknown>;
+  invalidSummary.score_summary = { quality_mean: 2, safety_violations: -1 };
+  assert.throws(
+    () => parseWorkspaceReports({ schemaVersion: 1, reports: [invalidSummary] }),
+    /score_summary.quality_mean must be between 0.0 and 1.0/,
+  );
+  assert.throws(
+    () => parseWorkspaceReports({
+      schemaVersion: 1,
+      reports: [report()],
+      runtime: {
+        mode: "off",
+        state: "off",
+        issue: "raw arbitrary detail",
+        period: "",
+        calls: 0,
+        sessions: 0,
+        warningCount: 0,
+        hasSnapshot: false,
+      },
+    }),
+    /Unsupported runtime issue/,
+  );
+});
+
 test("classifies complete snapshot deltas conservatively", () => {
   const baseline = snapshot(report(), "2026-09-05T10:00:00Z");
   const improved = { ...baseline, recordedAt: "2026-09-05T11:00:00Z", warnings: 0 };

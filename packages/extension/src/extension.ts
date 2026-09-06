@@ -12,6 +12,18 @@ import {
   type ServerOptions,
 } from "vscode-languageclient/node";
 import { ObservabilityCenter } from "./center.js";
+import {
+  ProviderProtocolService,
+  type ProviderStatus,
+} from "./provider-service.js";
+import {
+  codeBurnPolicyBlock,
+  providerInitializationOptions,
+  resolveProviderSettings,
+  runtimeEnvironment,
+  type ProviderSettings,
+  type WorkspacePolicy,
+} from "./provider-settings.js";
 
 const harnessDocumentPatterns = [
   "**/AGENTS.md",
@@ -32,7 +44,6 @@ const harnessDocumentPatterns = [
   "**/.cursor/rules/**",
 ] as const;
 const excludePattern = "{**/.git/**,**/.venv/**,**/build/**,**/dist/**,**/node_modules/**,**/venv/**}";
-const workspaceReportMethod = "harnessLens/workspaceReport";
 const refreshRuntimeCommand = "harnessMetrics.refreshCodeBurn";
 
 interface WorkspaceHarnessFile {
@@ -43,6 +54,49 @@ interface WorkspaceHarnessFile {
 let languageClient: LanguageClient | undefined;
 let languageServerStart: Promise<void> | undefined;
 let serverFailureReported = false;
+let providerConfigurationIssueReported: string | undefined;
+
+function workspacePolicy(): WorkspacePolicy {
+  return {
+    workspaceTrusted: vscode.workspace.isTrusted,
+    virtualWorkspace: vscode.workspace.workspaceFolders
+      ?.some((folder) => folder.uri.scheme !== "file") ?? false,
+  };
+}
+
+function providerSettings(resource: vscode.Uri): ProviderSettings {
+  const configuration = vscode.workspace.getConfiguration("harnessLens", resource);
+  return resolveProviderSettings({
+    runtimeMode: configuration.get<unknown>("runtime.mode"),
+    codeBurnEnabled: configuration.get<unknown>("providers.codeburn.enabled"),
+    executable: configuration.get<unknown>("runtime.executable"),
+    period: configuration.get<unknown>("runtime.period"),
+    snapshotPath: configuration.get<unknown>("runtime.snapshotPath"),
+    maxFiles: configuration.get<unknown>("report.maxFiles"),
+  });
+}
+
+async function reportProviderConfigurationIssues(settings: ProviderSettings): Promise<void> {
+  const signature = settings.issues
+    .map((issue) => `${issue.setting}:${issue.message}`)
+    .join("|");
+  if (!signature) {
+    providerConfigurationIssueReported = undefined;
+    return;
+  }
+  if (providerConfigurationIssueReported === signature) {
+    return;
+  }
+  providerConfigurationIssueReported = signature;
+  const issue = settings.issues[0]!;
+  const action = await vscode.window.showWarningMessage(
+    `Harness Lens rejected configuration safely: ${issue.message}`,
+    "Open Settings",
+  );
+  if (action === "Open Settings") {
+    await vscode.commands.executeCommand("workbench.action.openSettings", issue.setting);
+  }
+}
 
 async function scanWorkspace(): Promise<readonly WorkspaceHarnessFile[]> {
   const matches = await Promise.all(
@@ -112,21 +166,9 @@ function ensureLanguageServer(context: vscode.ExtensionContext): Promise<void> {
       "languageServer.arguments",
       [],
     );
-    const runtimeMode = configuration.get<string>("runtime.mode", "off");
-    const runtimeExecutable = configuration.get<string>("runtime.executable", "codeburn");
-    const runtimePeriod = configuration.get<string>("runtime.period", "30days");
-    const runtimeSnapshotPath = configuration.get<string>("runtime.snapshotPath", "");
-    const environment: NodeJS.ProcessEnv = {
-      ...process.env,
-      HARNESS_METRICS_MODE: runtimeMode,
-      HARNESS_METRICS_CODEBURN_EXECUTABLE: runtimeExecutable,
-      HARNESS_METRICS_CODEBURN_PERIOD: runtimePeriod,
-    };
-    if (runtimeSnapshotPath.trim()) {
-      environment.HARNESS_METRICS_SNAPSHOT_PATH = runtimeSnapshotPath;
-    } else {
-      delete environment.HARNESS_METRICS_SNAPSHOT_PATH;
-    }
+    const settings = providerSettings(filesystemRoot.uri);
+    await reportProviderConfigurationIssues(settings);
+    const environment = runtimeEnvironment(process.env, settings);
     const serverOptions: ServerOptions = {
       command,
       args: [...args],
@@ -137,6 +179,7 @@ function ensureLanguageServer(context: vscode.ExtensionContext): Promise<void> {
         scheme: "file",
         pattern,
       })),
+      initializationOptions: providerInitializationOptions(settings, workspacePolicy()),
       outputChannelName: "Harness Lens Language Server",
     };
     const client = new LanguageClient(
@@ -213,17 +256,99 @@ export function activate(context: vscode.ExtensionContext): Readonly<{
     }
   });
 
+  const enableCodeBurn = vscode.commands.registerCommand(
+    "harnessLens.enableCodeBurn",
+    async () => {
+      const folder = vscode.window.activeTextEditor
+        ? vscode.workspace.getWorkspaceFolder(vscode.window.activeTextEditor.document.uri)
+        : vscode.workspace.workspaceFolders?.find((candidate) => candidate.uri.scheme === "file");
+      if (!folder || folder.uri.scheme !== "file") {
+        await vscode.window.showWarningMessage("Open a filesystem workspace before enabling CodeBurn.");
+        return;
+      }
+      const policyBlock = codeBurnPolicyBlock(workspacePolicy());
+      if (policyBlock) {
+        await vscode.window.showWarningMessage(policyBlock);
+        return;
+      }
+      const configuration = vscode.workspace.getConfiguration("harnessLens", folder.uri);
+      if (configuration.get<boolean>("providers.codeburn.enabled", false)) {
+        await vscode.window.showInformationMessage("CodeBurn provider is already enabled for this VS Code window.");
+        return;
+      }
+      await ensureLanguageServer(context);
+      const client = languageClient;
+      if (!client) {
+        await vscode.window.showWarningMessage(
+          "Start a compatible Harness Lens language server before enabling CodeBurn.",
+        );
+        return;
+      }
+      let codeBurn: ProviderStatus;
+      try {
+        const catalog = await new ProviderProtocolService(
+          (method, parameters) => client.sendRequest(method, parameters),
+        ).catalog();
+        if (catalog.issue) {
+          throw new Error(`Language server rejected provider selection: ${catalog.issue}.`);
+        }
+        const provider = catalog.providers.find(
+          (candidate) => candidate.descriptor.id === "codeburn",
+        );
+        if (
+          !provider
+          || !provider.descriptor.optional
+          || !provider.descriptor.capabilities.includes("runtime_aggregates")
+        ) {
+          throw new Error("Language server catalog does not expose optional CodeBurn support.");
+        }
+        codeBurn = provider;
+      } catch (error: unknown) {
+        const detail = error instanceof Error ? error.message : String(error);
+        await vscode.window.showWarningMessage(`Cannot enable CodeBurn: ${detail}`);
+        return;
+      }
+      const providerVersion = codeBurn.descriptor.version
+        ? ` ${codeBurn.descriptor.version}`
+        : "";
+      const providerLicense = codeBurn.descriptor.license ?? "license not reported";
+      const action = await vscode.window.showWarningMessage(
+        `Enable ${codeBurn.descriptor.displayName}${providerVersion} for this VS Code window? Catalog reports ${providerLicense} and ${codeBurn.installation.replaceAll("_", " ")}. Live mode may launch its separately installed executable. Harness Lens never installs or bundles it.`,
+        { modal: true },
+        "Enable Provider",
+      );
+      if (action !== "Enable Provider") {
+        return;
+      }
+      await configuration.update(
+        "providers.codeburn.enabled",
+        true,
+        vscode.ConfigurationTarget.Workspace,
+      );
+      await vscode.window.showInformationMessage(
+        "CodeBurn provider enabled. Runtime remains off until live or snapshot mode is selected.",
+      );
+    },
+  );
+
   const observability = new ObservabilityCenter(context, async (folder) => {
     await ensureLanguageServer(context);
-    if (!languageClient) {
+    const client = languageClient;
+    if (!client) {
       throw new Error("Language server is disabled, unavailable, or workspace is not trusted.");
     }
-    return languageClient.sendRequest(workspaceReportMethod, {
-      rootUri: folder.uri.toString(),
-      maxFiles: vscode.workspace
-        .getConfiguration("harnessLens", folder.uri)
-        .get<number>("report.maxFiles", 5000),
-    });
+    const service = new ProviderProtocolService(
+      (method, parameters) => client.sendRequest(method, parameters),
+    );
+    const response = await service.aggregate(
+      folder.uri.toString(),
+      providerSettings(folder.uri).maxFiles,
+    );
+    return {
+      schemaVersion: response.schemaVersion,
+      reports: [response.native],
+      runtime: response.runtime,
+    };
   });
   const openCenter = vscode.commands.registerCommand(
     "harnessLens.openCenter",
@@ -237,8 +362,23 @@ export function activate(context: vscode.ExtensionContext): Readonly<{
     "harnessLens.refreshRuntime",
     async () => {
       await ensureLanguageServer(context);
-      if (!languageClient) {
+      const client = languageClient;
+      if (!client) {
         throw new Error("Language server is disabled, unavailable, or workspace is not trusted.");
+      }
+      const folder = vscode.window.activeTextEditor
+        ? vscode.workspace.getWorkspaceFolder(vscode.window.activeTextEditor.document.uri)
+        : vscode.workspace.workspaceFolders?.find((candidate) => candidate.uri.scheme === "file");
+      const settings = folder ? providerSettings(folder.uri) : undefined;
+      if (!settings || settings.runtimeMode === "off") {
+        const action = await vscode.window.showInformationMessage(
+          "Optional runtime evidence is off. Enable CodeBurn and select live or snapshot mode first.",
+          "Open Settings",
+        );
+        if (action === "Open Settings") {
+          await vscode.commands.executeCommand("workbench.action.openSettings", "harnessLens.runtime");
+        }
+        return;
       }
       await vscode.commands.executeCommand(refreshRuntimeCommand);
       await observability.refresh(false);
@@ -273,6 +413,7 @@ export function activate(context: vscode.ExtensionContext): Readonly<{
     if (
       event.affectsConfiguration("harnessLens.languageServer")
       || event.affectsConfiguration("harnessLens.runtime")
+      || event.affectsConfiguration("harnessLens.providers")
     ) {
       void stopLanguageServer().then(() => ensureLanguageServer(context));
     }
@@ -295,6 +436,7 @@ export function activate(context: vscode.ExtensionContext): Readonly<{
 
   context.subscriptions.push(
     scanCommand,
+    enableCodeBurn,
     openCenter,
     refreshObservability,
     refreshRuntime,

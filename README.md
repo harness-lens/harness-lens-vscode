@@ -43,10 +43,19 @@ content-safe workspace reports, per-file context and configured input cost,
 findings, score methods, plugin execution, and local comparison history.
 
 Optional aggregate runtime evidence supports explicit `off`, `live`, and
-`snapshot` modes; default `off` performs no capture. File effectiveness and
+`snapshot` modes. CodeBurn provider and runtime mode both default off for each
+VS Code window; selecting `live` alone cannot launch it. Enable provider
+explicitly with **Harness Lens:
+Enable CodeBurn Provider**, then select a runtime mode. File effectiveness and
 tool-call history stay visibly unmeasured until sanitized attributable evidence
 is available. Static token-cost estimates are never presented as observed model
 or tool spend.
+
+Editor sends explicit trust, virtual-workspace, and selected-provider state to
+language server initialization. The enable flow validates the schema-versioned
+provider catalog, and the metrics center validates aggregate responses before
+use. CodeBurn remains optional, separately installed, MIT-licensed, and
+unbundled; extension never downloads, installs, or updates it.
 
 Install the server from a checkout of the
 [`language-server`](https://github.com/harness-lens/language-server) repository:
