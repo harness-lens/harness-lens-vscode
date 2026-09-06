@@ -16,7 +16,7 @@ Sibling repository for HarnessLens editor integration and reusable VS Code-facin
 - Canonical VS Code extension ID: `harness-lens.harness-lens`
 - Display name: `Harness Lens`
 - Marketplace publisher: `harness-lens`
-- Marketplace lifecycle: `0.0.1` unpublished; `0.0.2` prepared as Preview
+- Marketplace lifecycle: `0.0.1` published; `0.0.2` prepared as Preview
 
 VS Code forms the canonical extension ID as `<publisher>.<name>`. The unscoped Marketplace manifest and scoped npm package therefore use separate manifests in this repository.
 
@@ -42,9 +42,11 @@ extensions such as Error Lens. Its Activity Bar view and metrics center expose
 content-safe workspace reports, per-file context and configured input cost,
 findings, score methods, plugin execution, and local comparison history.
 
-File effectiveness and tool-call runtime stay visibly unmeasured until
-sanitized attributed runtime evidence is available. Static token-cost estimates
-are never presented as observed model or tool spend.
+Optional aggregate runtime evidence supports explicit `off`, `live`, and
+`snapshot` modes; default `off` performs no capture. File effectiveness and
+tool-call history stay visibly unmeasured until sanitized attributable evidence
+is available. Static token-cost estimates are never presented as observed model
+or tool spend.
 
 Install the server from a checkout of the
 [`language-server`](https://github.com/harness-lens/language-server) repository:
@@ -103,3 +105,9 @@ implementation is licensed under MPL-2.0. When Covered Software is distributed,
 modified MPL-covered files must remain available in Source Code Form under the
 license. See [LICENSING](LICENSING.md), [COPYRIGHT](COPYRIGHT), and
 [TRADEMARKS](TRADEMARKS).
+
+## Completion plan
+
+See [observability completion](docs/observability-completion.md) for the current
+dedicated editor interface, remaining runtime-history and attribution work,
+and dependency-ordered verification and publication gates.

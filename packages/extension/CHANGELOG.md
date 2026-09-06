@@ -5,15 +5,18 @@
 
 ## Unreleased
 
-- Add Harness Lens Activity Bar workspace observability tree.
-- Add content-safe metrics center backed by language-server workspace reports.
-- Add per-file context, configured cost, findings, provenance, and navigation.
-- Add local report history and deterministic improvement/degradation states.
-- Keep runtime tool-call cost and per-file effectiveness explicitly unmeasured
-  until attributed evidence is available.
-
 ## 0.0.2
 
+- Add Harness Lens Activity Bar workspace observability tree.
+- Add metrics section navigation, file filtering, and runtime settings/refresh actions.
+- Add content-safe metrics center backed by bounded language-server reports.
+- Add per-file context, configured cost, findings, provenance, references, and
+  source navigation.
+- Add local report history and deterministic improvement/degradation states.
+- Add explicit `off`, `live`, and `snapshot` aggregate runtime modes; keep
+  runtime off by default and preserve deterministic findings.
+- Keep tool-call history and per-file effectiveness explicitly unmeasured until
+  bounded attributable evidence exists.
 - Mark the Marketplace extension as an early preview.
 - Clarify the features available today and the features not yet implemented.
 - Remove the linter category until validation is available.

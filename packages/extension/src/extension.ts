@@ -33,6 +33,7 @@ const harnessDocumentPatterns = [
 ] as const;
 const excludePattern = "{**/.git/**,**/.venv/**,**/build/**,**/dist/**,**/node_modules/**,**/venv/**}";
 const workspaceReportMethod = "harnessLens/workspaceReport";
+const refreshRuntimeCommand = "harnessMetrics.refreshCodeBurn";
 
 interface WorkspaceHarnessFile {
   kind: HarnessKind;
@@ -91,15 +92,14 @@ function ensureLanguageServer(context: vscode.ExtensionContext): Promise<void> {
     return Promise.resolve();
   }
 
-  const configuration = vscode.workspace.getConfiguration("harnessLens");
-  if (!configuration.get<boolean>("languageServer.enabled", true)
-      || !vscode.workspace.isTrusted) {
-    return Promise.resolve();
-  }
-
   const filesystemRoot = vscode.workspace.workspaceFolders
     ?.find((folder) => folder.uri.scheme === "file");
   if (!filesystemRoot) {
+    return Promise.resolve();
+  }
+  const configuration = vscode.workspace.getConfiguration("harnessLens", filesystemRoot.uri);
+  if (!configuration.get<boolean>("languageServer.enabled", true)
+      || !vscode.workspace.isTrusted) {
     return Promise.resolve();
   }
 
@@ -112,10 +112,25 @@ function ensureLanguageServer(context: vscode.ExtensionContext): Promise<void> {
       "languageServer.arguments",
       [],
     );
+    const runtimeMode = configuration.get<string>("runtime.mode", "off");
+    const runtimeExecutable = configuration.get<string>("runtime.executable", "codeburn");
+    const runtimePeriod = configuration.get<string>("runtime.period", "30days");
+    const runtimeSnapshotPath = configuration.get<string>("runtime.snapshotPath", "");
+    const environment: NodeJS.ProcessEnv = {
+      ...process.env,
+      HARNESS_METRICS_MODE: runtimeMode,
+      HARNESS_METRICS_CODEBURN_EXECUTABLE: runtimeExecutable,
+      HARNESS_METRICS_CODEBURN_PERIOD: runtimePeriod,
+    };
+    if (runtimeSnapshotPath.trim()) {
+      environment.HARNESS_METRICS_SNAPSHOT_PATH = runtimeSnapshotPath;
+    } else {
+      delete environment.HARNESS_METRICS_SNAPSHOT_PATH;
+    }
     const serverOptions: ServerOptions = {
       command,
       args: [...args],
-      options: { cwd: filesystemRoot.uri.fsPath },
+      options: { cwd: filesystemRoot.uri.fsPath, env: environment },
     };
     const clientOptions: LanguageClientOptions = {
       documentSelector: harnessDocumentPatterns.map((pattern) => ({
@@ -205,6 +220,9 @@ export function activate(context: vscode.ExtensionContext): Readonly<{
     }
     return languageClient.sendRequest(workspaceReportMethod, {
       rootUri: folder.uri.toString(),
+      maxFiles: vscode.workspace
+        .getConfiguration("harnessLens", folder.uri)
+        .get<number>("report.maxFiles", 5000),
     });
   });
   const openCenter = vscode.commands.registerCommand(
@@ -214,6 +232,17 @@ export function activate(context: vscode.ExtensionContext): Readonly<{
   const refreshObservability = vscode.commands.registerCommand(
     "harnessLens.refreshObservability",
     () => observability.refresh(true),
+  );
+  const refreshRuntime = vscode.commands.registerCommand(
+    "harnessLens.refreshRuntime",
+    async () => {
+      await ensureLanguageServer(context);
+      if (!languageClient) {
+        throw new Error("Language server is disabled, unavailable, or workspace is not trusted.");
+      }
+      await vscode.commands.executeCommand(refreshRuntimeCommand);
+      await observability.refresh(false);
+    },
   );
   const openSource = vscode.commands.registerCommand(
     "harnessLens.openSource",
@@ -241,7 +270,10 @@ export function activate(context: vscode.ExtensionContext): Readonly<{
     }
   });
   const configuration = vscode.workspace.onDidChangeConfiguration((event) => {
-    if (event.affectsConfiguration("harnessLens.languageServer")) {
+    if (
+      event.affectsConfiguration("harnessLens.languageServer")
+      || event.affectsConfiguration("harnessLens.runtime")
+    ) {
       void stopLanguageServer().then(() => ensureLanguageServer(context));
     }
   });
@@ -265,6 +297,7 @@ export function activate(context: vscode.ExtensionContext): Readonly<{
     scanCommand,
     openCenter,
     refreshObservability,
+    refreshRuntime,
     openSource,
     restart,
     documents,
