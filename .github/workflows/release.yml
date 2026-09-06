@@ -15,6 +15,11 @@ jobs:
     name: Verify release artifacts
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      artifact-metadata: write
+      attestations: write
+      contents: read
+      id-token: write
 
     steps:
       - name: Checkout repository
@@ -42,6 +47,32 @@ jobs:
       - name: Build packages
         run: npm run package
 
+      - name: Generate package SBOMs
+        run: npm run sbom
+
+      - name: Write immutable checksums
+        working-directory: artifacts
+        run: sha256sum *.tgz *.vsix *.cdx.json > SHA256SUMS
+
+      - name: Attest package build provenance
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            artifacts/*.tgz
+            artifacts/*.vsix
+
+      - name: Attest npm package SBOM
+        uses: actions/attest@v4
+        with:
+          subject-path: artifacts/*.tgz
+          sbom-path: artifacts/harness-lens-vscode.cdx.json
+
+      - name: Attest extension SBOM
+        uses: actions/attest@v4
+        with:
+          subject-path: artifacts/*.vsix
+          sbom-path: artifacts/harness-lens-extension.cdx.json
+
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v7
         with:
@@ -50,8 +81,8 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  attach-vsix:
-    name: Attach VSIX to GitHub release
+  attach-packages:
+    name: Attach packages to GitHub release
     needs: package
     runs-on: ubuntu-latest
     permissions:
@@ -64,10 +95,51 @@ jobs:
           name: harness-lens-packages
           path: artifacts/
 
-      - name: Attach VSIX
-        run: gh release upload "${{ github.event.release.tag_name }}" artifacts/*.vsix --clobber
+      - name: Attach packages, checksums, and SBOMs
+        run: gh release upload "${{ github.event.release.tag_name }}" artifacts/*.vsix artifacts/*.tgz artifacts/*.cdx.json artifacts/SHA256SUMS
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+
+  publish-open-vsx:
+    name: Publish reviewed VSIX to Open VSX
+    needs: package
+    if: ${{ vars.OPEN_VSX_PUBLISH_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: open-vsx
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download reviewed release artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: harness-lens-packages
+          path: artifacts/
+
+      - name: Verify downloaded release artifacts
+        working-directory: artifacts
+        run: sha256sum --check SHA256SUMS
+
+      - name: Publish to Open VSX
+        run: npm run publish:open-vsx
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
 
   publish-npm:
     name: Publish npm package
@@ -103,5 +175,15 @@ jobs:
       - name: Run tests
         run: npm test
 
-      - name: Publish with npm trusted publishing
-        run: npm publish --workspace @harness-lens/vscode --access public
+      - name: Download reviewed release artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: harness-lens-packages
+          path: artifacts/
+
+      - name: Verify downloaded release artifacts
+        working-directory: artifacts
+        run: sha256sum --check SHA256SUMS
+
+      - name: Publish reviewed tarball with npm trusted publishing
+        run: npm publish artifacts/harness-lens-vscode-*.tgz --access public

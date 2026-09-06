@@ -6,6 +6,42 @@ export interface SourceRecord {
   kind: string;
   scope: string;
   bytes: number;
+  characters: number | null;
+  lines: number | null;
+  inclusionDepth: number | null;
+  tokenEstimate: TokenEstimate | null;
+  configuredInputCost: ConfiguredInputCost | null;
+  findingsCount: number | null;
+  provenance: ProvenanceLink[];
+}
+
+export interface TokenEstimate {
+  value: number;
+  tokenizer: string;
+  basis: string;
+  method: string;
+}
+
+export interface ConfiguredInputCost {
+  value: number;
+  unit: string;
+  reference?: string;
+  method: string;
+}
+
+export interface ProvenanceLink {
+  relationship: string;
+  path: string;
+  method: string;
+}
+
+export interface InclusionEdge {
+  source?: string;
+  target: string;
+  depth: number;
+  status: "resolved" | "missing" | "cycle" | "ignored" | "out_of_root" | "unavailable";
+  method: string;
+  assumptions: string[];
 }
 
 export interface Finding {
@@ -54,6 +90,7 @@ export interface AnalysisReport {
     reasons: { code: string; path?: string }[];
   };
   sources: SourceRecord[];
+  inclusions: InclusionEdge[];
   findings: Finding[];
   metrics: Metric[];
   scores: Score[];
@@ -64,6 +101,18 @@ export interface AnalysisReport {
 export interface WorkspaceReports {
   schemaVersion: number;
   reports: AnalysisReport[];
+  runtime: RuntimeStatus;
+}
+
+export interface RuntimeStatus {
+  mode: "off" | "live" | "snapshot";
+  state: "off" | "loading" | "ready" | "failed" | "invalid";
+  issue?: string;
+  period: string;
+  calls: number;
+  sessions: number;
+  warningCount: number;
+  hasSnapshot: boolean;
 }
 
 export interface AssetSummary extends SourceRecord {
@@ -137,13 +186,68 @@ function optionalNumber(value: unknown, label: string): number | undefined {
   return value === undefined || value === null ? undefined : finite(value, label);
 }
 
+function optionalObject(value: unknown, label: string): Record<string, unknown> | undefined {
+  return value === undefined || value === null ? undefined : object(value, label);
+}
+
 function parseSource(value: unknown): SourceRecord {
   const source = object(value, "source");
+  const token = optionalObject(source.estimated_tokens, "source.estimated_tokens");
+  const cost = optionalObject(source.configured_input_cost, "source.configured_input_cost");
+  const costReference = cost
+    ? optionalText(cost.reference, "configured cost.reference")
+    : undefined;
   return {
     path: text(source.path, "source.path"),
     kind: text(source.kind, "source.kind"),
     scope: text(source.scope, "source.scope"),
     bytes: finite(source.bytes, "source.bytes"),
+    characters: optionalNumber(source.characters, "source.characters") ?? null,
+    lines: optionalNumber(source.lines, "source.lines") ?? null,
+    inclusionDepth: optionalNumber(source.inclusion_depth, "source.inclusion_depth") ?? null,
+    tokenEstimate: token ? {
+      value: finite(token.value, "token estimate.value"),
+      tokenizer: text(token.tokenizer, "token estimate.tokenizer"),
+      basis: text(token.basis, "token estimate.basis"),
+      method: text(token.method, "token estimate.method"),
+    } : null,
+    configuredInputCost: cost ? {
+      value: finite(cost.value, "configured cost.value"),
+      unit: text(cost.unit, "configured cost.unit"),
+      ...(costReference === undefined ? {} : { reference: costReference }),
+      method: text(cost.method, "configured cost.method"),
+    } : null,
+    findingsCount: optionalNumber(source.findings_count, "source.findings_count") ?? null,
+    provenance: source.provenance === undefined
+      ? []
+      : array(source.provenance, "source.provenance").map((value) => {
+          const link = object(value, "provenance link");
+          return {
+            relationship: text(link.relationship, "provenance.relationship"),
+            path: text(link.path, "provenance.path"),
+            method: text(link.method, "provenance.method"),
+          };
+        }),
+  };
+}
+
+function parseInclusion(value: unknown): InclusionEdge {
+  const edge = object(value, "inclusion edge");
+  const status = text(edge.status, "inclusion.status");
+  if (!["resolved", "missing", "cycle", "ignored", "out_of_root", "unavailable"].includes(status)) {
+    throw new Error(`Unsupported inclusion status: ${status}.`);
+  }
+  const source = optionalText(edge.source, "inclusion.source");
+  return {
+    ...(source === undefined ? {} : { source }),
+    target: text(edge.target, "inclusion.target"),
+    depth: finite(edge.depth, "inclusion.depth"),
+    status: status as InclusionEdge["status"],
+    method: text(edge.method, "inclusion.method"),
+    assumptions: edge.assumptions === undefined
+      ? []
+      : array(edge.assumptions, "inclusion.assumptions")
+        .map((assumption) => text(assumption, "inclusion assumption")),
   };
 }
 
@@ -229,6 +333,9 @@ function parseReport(value: unknown): AnalysisReport {
       }),
     },
     sources: array(report.sources, "report.sources").map(parseSource),
+    inclusions: report.inclusions === undefined
+      ? []
+      : array(report.inclusions, "report.inclusions").map(parseInclusion),
     findings: array(report.findings, "report.findings").map(parseFinding),
     metrics: array(report.metrics, "report.metrics").map(parseMetric),
     scores: array(report.scores, "report.scores").map(parseScore),
@@ -254,6 +361,41 @@ export function parseWorkspaceReports(value: unknown): WorkspaceReports {
   return {
     schemaVersion,
     reports: array(envelope.reports, "workspace reports").map(parseReport),
+    runtime: parseRuntimeStatus(envelope.runtime),
+  };
+}
+
+function parseRuntimeStatus(value: unknown): RuntimeStatus {
+  if (value === undefined || value === null) {
+    return {
+      mode: "off",
+      state: "off",
+      period: "",
+      calls: 0,
+      sessions: 0,
+      warningCount: 0,
+      hasSnapshot: false,
+    };
+  }
+  const runtime = object(value, "runtime status");
+  const mode = text(runtime.mode, "runtime.mode");
+  const state = text(runtime.state, "runtime.state");
+  if (!["off", "live", "snapshot"].includes(mode)) {
+    throw new Error(`Unsupported runtime mode: ${mode}.`);
+  }
+  if (!["off", "loading", "ready", "failed", "invalid"].includes(state)) {
+    throw new Error(`Unsupported runtime state: ${state}.`);
+  }
+  const issue = optionalText(runtime.issue, "runtime.issue");
+  return {
+    mode: mode as RuntimeStatus["mode"],
+    state: state as RuntimeStatus["state"],
+    ...(issue === undefined ? {} : { issue }),
+    period: text(runtime.period, "runtime.period"),
+    calls: finite(runtime.calls, "runtime.calls"),
+    sessions: finite(runtime.sessions, "runtime.sessions"),
+    warningCount: finite(runtime.warningCount, "runtime.warningCount"),
+    hasSnapshot: boolean(runtime.hasSnapshot, "runtime.hasSnapshot"),
   };
 }
 
@@ -276,11 +418,11 @@ export function assetSummaries(report: AnalysisReport): AssetSummary[] {
         report,
         "harness.source.estimated_tokens",
         source.path,
-      )?.value ?? null,
-      inputCostPerInvocation: perInvocation?.value ?? null,
+      )?.value ?? source.tokenEstimate?.value ?? null,
+      inputCostPerInvocation: perInvocation?.value ?? source.configuredInputCost?.value ?? null,
       inputCostTotal: metric(report, "harness.source.input_cost_total", source.path)?.value ?? null,
-      costUnit: perInvocation?.unit ?? null,
-      costReference: perInvocation?.reference ?? null,
+      costUnit: perInvocation?.unit ?? source.configuredInputCost?.unit ?? null,
+      costReference: perInvocation?.reference ?? source.configuredInputCost?.reference ?? null,
       warnings: findings.filter((finding) => finding.severity === "warning").length,
       errors: findings.filter((finding) => finding.severity === "error").length,
       findings: findings.filter((finding) => finding.severity !== "pass").length,

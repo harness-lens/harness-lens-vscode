@@ -25,6 +25,8 @@ Harness Lens is an early VS Code integration for coding-agent instruction files.
   execution, and up to 100 local content-free history snapshots per workspace.
 - Classify complete-report changes as improving, stable, degrading, or
   insufficient evidence using an explicit deterministic delta method.
+- Show consent-controlled aggregate runtime status from newer language servers;
+  runtime mode defaults to `off`.
 
 ## Not available yet
 
@@ -32,6 +34,13 @@ Harness Lens is an early VS Code integration for coding-agent instruction files.
 - Attributed per-file effectiveness.
 - Tool-call error, retry, timeout, or cost history until the provider-neutral
   sanitized runtime trace contract is available.
+
+Runtime evidence defaults to `off`. Choose `live` to run an installed CodeBurn
+executable through the language server, or `snapshot` to read a canonical safe
+aggregate snapshot without process launch. Configure mode, executable, period,
+snapshot path, and report bound under `harnessLens.runtime.*` and
+`harnessLens.report.maxFiles`. CodeBurn is optional and not bundled. Aggregate
+runtime evidence never changes deterministic findings or scores.
 
 ## Language server
 
@@ -62,7 +71,7 @@ Supported files:
 - Codex config, agents, and rules under `.codex/`
 - compatible rules under `.agents/rules/` and `.cursor/rules/`
 
-See the repository's [manual installation guide](../../docs/manual-installation.md)
+See the repository's [manual installation guide](https://github.com/harness-lens/harness-lens-vscode/blob/main/docs/manual-installation.md)
 for Windows, WSL, native language-server, VSIX, and CLI setup.
 
 Feedback and bug reports are welcome in the [Harness Lens VS Code repository](https://github.com/harness-lens/harness-lens-vscode/issues).
@@ -71,4 +80,4 @@ Feedback and bug reports are welcome in the [Harness Lens VS Code repository](ht
 
 Early namespace-reservation versions used BSD-3-Clause. The official extension
 implementation is licensed under MPL-2.0. See [LICENSE](LICENSE) and the
-repository's [licensing policy](../../LICENSING.md).
+repository's [licensing policy](https://github.com/harness-lens/harness-lens-vscode/blob/main/LICENSING.md).

@@ -14,6 +14,7 @@ import {
   snapshot,
   type AnalysisReport,
   type HistorySnapshot,
+  type RuntimeStatus,
 } from "./center-model.js";
 import { centerHtml, type CenterViewState } from "./center-view.js";
 
@@ -38,6 +39,7 @@ class ObservationTree implements vscode.TreeDataProvider<ObservationItem> {
   private readonly changed = new vscode.EventEmitter<ObservationItem | undefined>();
   private report: AnalysisReport | undefined;
   private history: readonly HistorySnapshot[] = [];
+  private runtime: RuntimeStatus | undefined;
 
   readonly onDidChangeTreeData = this.changed.event;
 
@@ -45,9 +47,14 @@ class ObservationTree implements vscode.TreeDataProvider<ObservationItem> {
     this.changed.dispose();
   }
 
-  update(report: AnalysisReport | undefined, history: readonly HistorySnapshot[]): void {
+  update(
+    report: AnalysisReport | undefined,
+    history: readonly HistorySnapshot[],
+    runtime?: RuntimeStatus,
+  ): void {
     this.report = report;
     this.history = history;
+    this.runtime = runtime;
     this.changed.fire(undefined);
   }
 
@@ -72,14 +79,8 @@ class ObservationTree implements vscode.TreeDataProvider<ObservationItem> {
     const report = this.report;
     const trend = classifyTrend(this.history);
     const tokens = aggregateMetric(report, "harness.total_estimated_tokens");
-    const overview = [
-      leaf("Open metrics center", "dashboard", "harnessLens.openCenter"),
-      leaf(`${report.completeness.complete ? "Complete" : "Partial"} coverage`, report.completeness.complete ? "pass" : "warning"),
-      leaf(`${report.sources.length} harness files`, "files"),
-      leaf(tokens === null ? "Context cost not measured" : `${Math.round(tokens)} estimated tokens`, "symbol-numeric"),
-      leaf(`${trend.state.replace("_", " ")}: ${trend.reason}`, trend.state === "degrading" ? "warning" : "pulse"),
-    ];
-    const files = assetSummaries(report).map((asset) => {
+    const assets = assetSummaries(report);
+    const fileItems = assets.map((asset) => {
       const item = new ObservationItem(asset.path, vscode.TreeItemCollapsibleState.None);
       item.description = `${asset.estimatedTokens === null ? "—" : Math.round(asset.estimatedTokens)} tokens · ${asset.findings} findings`;
       item.tooltip = `${asset.bytes} bytes\nStatic input cost: ${asset.inputCostPerInvocation ?? "not measured"}\nEffectiveness: not measured`;
@@ -91,6 +92,51 @@ class ObservationTree implements vscode.TreeDataProvider<ObservationItem> {
       };
       return item;
     });
+    const skillItems = assets
+      .filter((asset) => asset.kind === "skills" || asset.kind === "skill")
+      .map((asset) => {
+        const item = new ObservationItem(asset.path, vscode.TreeItemCollapsibleState.None);
+        item.description = `scope ${asset.scope}`;
+        item.tooltip = "Deterministic discovery provenance";
+        item.iconPath = new vscode.ThemeIcon("tools");
+        item.command = {
+          command: "harnessLens.openSource",
+          title: "Open Skill",
+          arguments: [{ path: asset.path, line: 1 }],
+        };
+        return item;
+      });
+    const referenceItems = report.inclusions
+      .filter((edge) => edge.source !== undefined)
+      .map((edge) => {
+        const item = new ObservationItem(
+          `${edge.source} → ${edge.target}`,
+          vscode.TreeItemCollapsibleState.None,
+        );
+        item.description = `${edge.status} · depth ${edge.depth}`;
+        item.tooltip = [
+          `Method: ${edge.method}`,
+          ...edge.assumptions.map((assumption) => `Assumption: ${assumption}`),
+        ].join("\n");
+        item.iconPath = new vscode.ThemeIcon(
+          edge.status === "resolved"
+            ? "references"
+            : edge.status === "cycle"
+              ? "sync"
+              : "warning",
+        );
+        if (edge.status === "resolved" || edge.status === "cycle") {
+          item.command = {
+            command: "harnessLens.openSource",
+            title: "Open Referenced File",
+            arguments: [{ path: edge.target, line: 1 }],
+          };
+        }
+        return item;
+      });
+    if (skillItems.length === 0) {
+      skillItems.push(leaf("No skills discovered", "info"));
+    }
     const findings = report.findings
       .filter((finding) => finding.severity !== "pass")
       .map((finding) => {
@@ -112,17 +158,38 @@ class ObservationTree implements vscode.TreeDataProvider<ObservationItem> {
         }
         return item;
       });
-    const runtime = [
-      leaf("Tool-call history: not measured", "history"),
-      leaf("Cost per tool call: not measured", "credit-card"),
-      leaf("Requires sanitized runtime trace", "shield"),
+    const context = [
+      leaf(tokens === null ? "Estimated tokens: not measured" : `${Math.round(tokens)} estimated tokens`, "symbol-numeric"),
+      leaf("Method: heuristic Unicode scalar count / 4", "beaker"),
+      leaf(`${report.completeness.complete ? "Complete" : "Partial"} discovery coverage`, report.completeness.complete ? "pass" : "warning"),
+      leaf(`${trend.state.replace("_", " ")}: ${trend.reason}`, trend.state === "degrading" ? "warning" : "pulse"),
     ];
+    const runtimeStatus = this.runtime;
+    const runtime = runtimeStatus
+      ? [
+          leaf(`Mode: ${runtimeStatus.mode}`, "settings"),
+          leaf(
+            `Status: ${runtimeStatus.state}${runtimeStatus.hasSnapshot ? " · snapshot available" : ""}`,
+            runtimeStatus.state === "ready" ? "pass" : runtimeStatus.state === "off" ? "circle-slash" : "warning",
+          ),
+          leaf(`${runtimeStatus.calls} calls · ${runtimeStatus.sessions} sessions`, "pulse"),
+          ...(runtimeStatus.issue ? [leaf(`Error class: ${runtimeStatus.issue}`, "warning")] : []),
+          leaf("Tool-call history: not measured", "history"),
+        ]
+      : [
+          leaf("Runtime status unavailable from server", "circle-slash"),
+          leaf("Tool-call history: not measured", "history"),
+        ];
 
     return [
-      group("Overview", "dashboard", overview),
-      group("Files and instructions", "files", files),
+      group("Workspace assets", "files", [
+        leaf("Open metrics center", "dashboard", "harnessLens.openCenter"),
+        ...fileItems,
+      ]),
+      group("Skills and references", "references", [...skillItems, ...referenceItems]),
       group("Findings", "issues", findings),
-      group("Tool-call runtime", "pulse", runtime),
+      group("Context consumption", "symbol-numeric", context),
+      group("Runtime history", "pulse", runtime),
     ];
   }
 }
@@ -184,6 +251,12 @@ export class ObservabilityCenter implements vscode.Disposable {
         const message = messageRecord(value);
         if (message?.type === "refresh") {
           void this.refresh(true);
+        } else if (message?.type === "runtime-settings") {
+          void vscode.commands.executeCommand("workbench.action.openSettings", "harnessLens.runtime");
+        } else if (message?.type === "refresh-runtime") {
+          void vscode.commands.executeCommand("harnessLens.refreshRuntime").then(undefined, () => {
+            void vscode.window.showWarningMessage("Runtime evidence is unavailable. Check runtime settings and language-server status.");
+          });
         } else if (message?.type === "open" && typeof message.path === "string") {
           void this.openSource({
             path: message.path,
@@ -222,13 +295,14 @@ export class ObservabilityCenter implements vscode.Disposable {
         history = appendSnapshot(history, snapshot(report));
         await this.context.workspaceState.update(key, history);
       }
-      this.state = { report, history };
-      this.tree.update(report, history);
+      this.state = { report, history, runtime: response.runtime };
+      this.tree.update(report, history, response.runtime);
       this.treeView.description = folder.name;
     } catch (error: unknown) {
       const detail = error instanceof Error ? error.message : String(error);
-      this.state = { history: [], error: detail };
-      this.tree.update(undefined, []);
+      this.state = { ...this.state, error: detail };
+      this.tree.update(this.state.report, this.state.history, this.state.runtime);
+      this.treeView.description = this.state.report ? "Previous report · refresh failed" : "Report unavailable";
       if (recordHistory) {
         void vscode.window.showWarningMessage(`Harness Lens report unavailable: ${detail}`);
       }

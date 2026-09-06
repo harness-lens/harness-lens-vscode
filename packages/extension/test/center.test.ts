@@ -18,7 +18,20 @@ function report(): AnalysisReport {
     schema_version: 1,
     root: "/workspace",
     completeness: { complete: true, reasons: [] },
-    sources: [{ path: "AGENTS.md", kind: "instructions", scope: "", bytes: 80 }],
+    sources: [{
+      path: "AGENTS.md",
+      kind: "instructions",
+      scope: "",
+      bytes: 80,
+      characters: null,
+      lines: null,
+      inclusionDepth: null,
+      tokenEstimate: null,
+      configuredInputCost: null,
+      findingsCount: null,
+      provenance: [],
+    }],
+    inclusions: [],
     findings: [{
       severity: "warning",
       rule_id: "HL010",
@@ -68,6 +81,13 @@ test("parses workspace report and groups per-file evidence", () => {
     kind: "instructions",
     scope: "",
     bytes: 80,
+    characters: null,
+    lines: null,
+    inclusionDepth: null,
+    tokenEstimate: null,
+    configuredInputCost: null,
+    findingsCount: null,
+    provenance: [],
     estimatedTokens: 20,
     inputCostPerInvocation: 0.00004,
     inputCostTotal: 0.004,
@@ -77,6 +97,73 @@ test("parses workspace report and groups per-file evidence", () => {
     errors: 0,
     findings: 1,
     effectiveness: null,
+  });
+  assert.equal(parsed.runtime.mode, "off");
+  assert.equal(parsed.runtime.state, "off");
+});
+
+test("parses enriched file records and inclusion edges", () => {
+  const raw = report() as unknown as Record<string, unknown>;
+  raw.sources = [{
+    path: "AGENTS.md",
+    kind: "agents",
+    scope: "",
+    bytes: 20,
+    characters: 18,
+    lines: 2,
+    inclusion_depth: 0,
+    estimated_tokens: {
+      value: 5,
+      tokenizer: "unicode_scalar_div_4",
+      basis: "Unicode scalar count divided by four",
+      method: "heuristic",
+    },
+    findings_count: 1,
+    provenance: [{
+      relationship: "direct_discovery",
+      path: "AGENTS.md",
+      method: "deterministic",
+    }],
+  }];
+  raw.inclusions = [{
+    source: "AGENTS.md",
+    target: "missing.md",
+    depth: 1,
+    status: "missing",
+    method: "heuristic",
+    assumptions: ["Local inline Markdown links are inclusion candidates"],
+  }];
+
+  const parsed = parseWorkspaceReports({ schemaVersion: 1, reports: [raw] });
+  assert.equal(parsed.reports[0]!.sources[0]!.characters, 18);
+  assert.equal(parsed.reports[0]!.sources[0]!.tokenEstimate?.value, 5);
+  assert.equal(parsed.reports[0]!.inclusions[0]!.status, "missing");
+});
+
+test("parses bounded safe runtime status", () => {
+  const parsed = parseWorkspaceReports({
+    schemaVersion: 1,
+    reports: [report()],
+    runtime: {
+      mode: "snapshot",
+      state: "failed",
+      issue: "invalid_data",
+      period: "30days",
+      calls: 12,
+      sessions: 3,
+      warningCount: 1,
+      hasSnapshot: true,
+    },
+  });
+  assert.deepEqual(parsed.runtime, {
+    mode: "snapshot",
+    state: "failed",
+    issue: "invalid_data",
+    period: "30days",
+    calls: 12,
+    sessions: 3,
+    warningCount: 1,
+    hasSnapshot: true,
   });
 });
 
@@ -100,12 +187,38 @@ test("renders safe per-file metrics and explicit runtime gaps", () => {
   const value = report();
   value.sources[0]!.path = '<script>alert("x")</script>';
   value.findings = [];
-  const html = centerHtml({ report: value, history: [snapshot(value)] }, "nonce");
+  const html = centerHtml({
+    report: value,
+    history: [snapshot(value)],
+    runtime: {
+      mode: "live",
+      state: "ready",
+      period: "30days",
+      calls: 12,
+      sessions: 3,
+      warningCount: 0,
+      hasSnapshot: true,
+    },
+  }, "nonce");
 
   assert.ok(!html.includes('<script>alert("x")</script>'));
   assert.match(html, /&lt;script&gt;alert\(&quot;x&quot;\)&lt;\/script&gt;/);
   assert.match(html, /Effectiveness/);
   assert.match(html, /Requires attributed runtime outcomes/);
-  assert.match(html, /Tool-call runtime/);
+  assert.match(html, /Runtime history/);
+  assert.match(html, /12 calls/);
+  assert.match(html, /Tool errors, retries, timeouts/);
   assert.equal(escapeHtml("<&"), "&lt;&amp;");
+});
+
+test("marks a retained report stale when refresh fails without rendering raw errors", () => {
+  const html = centerHtml({
+    report: report(),
+    history: [],
+    error: '<img src=x onerror="alert(1)">',
+  }, "nonce");
+  assert.match(html, /role="alert"/);
+  assert.match(html, /Refresh failed\. Previous report retained\./);
+  assert.ok(!html.includes('<img src=x'));
+  assert.match(html, /&lt;img src=x/);
 });

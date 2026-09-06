@@ -19,14 +19,18 @@
     "package": "npm run build && npm run pack:npm && npm run package:extension",
     "package:extension": "npm run build --workspace @harness-lens/vscode && npm run artifacts && npm run package --workspace packages/extension",
     "pack:npm": "npm run artifacts && npm pack --workspace @harness-lens/vscode --pack-destination artifacts",
+    "publish:open-vsx": "ovsx publish artifacts/harness-lens.vsix",
+    "sbom": "npm run artifacts && cyclonedx-npm --workspace @harness-lens/vscode --omit dev --output-reproducible --output-file artifacts/harness-lens-vscode.cdx.json && cyclonedx-npm --workspace harness-lens --omit dev --output-reproducible --output-file artifacts/harness-lens-extension.cdx.json",
     "test": "npm run test --workspace @harness-lens/vscode && npm run test --workspace packages/extension",
     "version:check": "node scripts/check-versions.mjs"
   },
   "devDependencies": {
+    "@cyclonedx/cyclonedx-npm": "^6.0.0",
     "@types/node": "^26.4.0",
     "@types/vscode": "1.134.0",
     "@vscode/vsce": "^3.9.2",
     "esbuild": "^0.28.2",
+    "ovsx": "^1.1.1",
     "typescript": "^7.0.2"
   },
   "allowScripts": {

@@ -7,6 +7,9 @@
 
 - Marketplace publisher: <https://marketplace.visualstudio.com/manage/publishers/harness-lens>
 - Public extension page: <https://marketplace.visualstudio.com/items?itemName=harness-lens.harness-lens>
+- Open VSX extension page: <https://open-vsx.org/extension/harness-lens/harness-lens>
+- Open VSX namespace settings: <https://open-vsx.org/user-settings/namespaces>
+- Open VSX trusted publishers: <https://open-vsx.org/user-settings/trusted-publishers>
 - npm organization packages: <https://www.npmjs.com/settings/harness-lens/packages>
 - Public npm package: <https://www.npmjs.com/package/@harness-lens/vscode>
 - GitHub repository settings: <https://github.com/harness-lens/harness-lens-vscode/settings>
@@ -63,6 +66,55 @@ unpublished extension remains recorded and API-discoverable, but it cannot be
 downloaded from Marketplace or VS Code.
 
 GitHub releases also attach the VSIX as a downloadable asset.
+
+## Open VSX
+
+Open VSX receives the exact reviewed `artifacts/harness-lens.vsix`; do not
+rebuild or modify a registry-specific copy. The release workflow publishes only
+when repository variable `OPEN_VSX_PUBLISH_ENABLED` is `true`.
+
+Before enabling publication:
+
+1. Sign the Open VSX publisher agreement and create the `harness-lens`
+   namespace.
+2. Claim namespace ownership and add a second owner for continuity.
+3. Protect the `open-vsx` GitHub environment with required reviewers. Store a
+   dedicated, least-privilege token as environment secret `OVSX_PAT`.
+4. Set `OPEN_VSX_PUBLISH_ENABLED=true` only after namespace, token, and
+   environment protections are verified.
+
+Confirm Open VSX and Visual Studio Marketplace show the same extension ID,
+version, README, changelog, and package checksum for each release.
+
+## Checksums, SBOMs, and provenance
+
+Release workflow attaches VSIX, npm tarball, CycloneDX JSON SBOMs, and
+`SHA256SUMS`. It creates separate GitHub build provenance and SBOM attestations
+for npm and VSIX packages. Consumers can verify provenance with:
+
+```bash
+gh attestation verify harness-lens.vsix --repo harness-lens/harness-lens-vscode
+```
+
+Both registry jobs verify the downloaded `SHA256SUMS` before publishing. npm
+receives the reviewed tarball from the packaging job; Open VSX receives the
+reviewed VSIX. Neither registry job repackages those artifacts.
+
+For local verification, run `npm run package` and `npm run sbom`. The SBOM
+command uses `--output-reproducible`; repeated generation from the same
+dependency tree must produce identical bytes. Then write and verify checksums:
+
+```bash
+cd artifacts
+sha256sum *.tgz *.vsix *.cdx.json > SHA256SUMS
+sha256sum --check SHA256SUMS
+```
+
+Local checksums do not provide GitHub attestations. Those are generated only
+by the release workflow for its own build artifacts.
+
+If a package changes, increment SemVer and issue a new release; never replace an
+asset while retaining old checksum or attestation.
 
 Azure DevOps global PATs retire on December 1, 2026. Do not build new PAT-based publishing automation. For future automated Marketplace publishing, configure Microsoft Entra workload identity federation and publish through Azure Pipelines with `vsce publish --azure-credential`.
 

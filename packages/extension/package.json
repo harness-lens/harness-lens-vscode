@@ -56,6 +56,12 @@
         "title": "Refresh Workspace Report",
         "category": "Harness Lens",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "harnessLens.refreshRuntime",
+        "title": "Refresh Runtime Evidence",
+        "category": "Harness Lens",
+        "icon": "$(pulse)"
       }
     ],
     "viewsContainers": {
@@ -116,6 +122,39 @@
           "default": [],
           "scope": "machine",
           "description": "Additional arguments passed to the language server."
+        },
+        "harnessLens.report.maxFiles": {
+          "type": "integer",
+          "default": 5000,
+          "minimum": 1,
+          "maximum": 50000,
+          "scope": "resource",
+          "description": "Maximum files scanned for one bounded workspace report."
+        },
+        "harnessLens.runtime.mode": {
+          "type": "string",
+          "enum": ["off", "live", "snapshot"],
+          "default": "off",
+          "scope": "resource",
+          "markdownDescription": "Runtime evidence mode. `off` performs deterministic analysis only. `live` runs CodeBurn aggregate commands. `snapshot` reads a canonical aggregate snapshot."
+        },
+        "harnessLens.runtime.executable": {
+          "type": "string",
+          "default": "codeburn",
+          "scope": "machine",
+          "description": "CodeBurn executable used only when runtime mode is live."
+        },
+        "harnessLens.runtime.period": {
+          "type": "string",
+          "default": "30days",
+          "scope": "resource",
+          "description": "Validated CodeBurn period selector used in live mode."
+        },
+        "harnessLens.runtime.snapshotPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "description": "Canonical aggregate JSON snapshot path used only in snapshot mode."
         }
       }
     }
