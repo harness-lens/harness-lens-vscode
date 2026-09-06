@@ -56,8 +56,30 @@ To prepare a Marketplace update:
 3. Run `npm ci`, `npm run check`, `npm test`, and `npm run package:extension`.
 4. Inspect the VSIX identity, file list, and bundled content.
 5. Install the VSIX locally and exercise **Harness Lens: Scan Workspace**.
-6. Upload `artifacts/harness-lens.vsix` from the publisher management panel.
+6. Publish a GitHub release and approve the protected `marketplace` environment.
 7. Verify the public Marketplace entry and install it by extension ID.
+
+The release workflow publishes the exact `harness-lens.vsix` produced by the
+package job. It downloads the combined release artifact, verifies every entry
+in `SHA256SUMS`, prints the VSIX checksum in the job log, and passes that file to
+`vsce publish --packagePath`. The Marketplace job contains no build or package
+command.
+
+Configure the current stable publishing path as follows:
+
+1. In Azure DevOps, create a short-lived token accepted by the Marketplace with
+   **All accessible organizations** selected and only the `Marketplace
+   (Manage)` scope, then confirm that identity has access to the publisher.
+2. Create a GitHub environment named `marketplace`, add required reviewers, and
+   store the token as environment secret `VSCE_PAT`.
+3. Create repository variable `VS_MARKETPLACE_PUBLISH_ENABLED=true` only after
+   the publisher identity and protected environment are ready.
+4. Publish a GitHub release from a protected version tag. Approval of the
+   `marketplace` environment is the final publication gate.
+
+These steps follow the current stable
+[VS Code CI publishing guide](https://code.visualstudio.com/api/working-with-extensions/continuous-integration#github-actions-automated-publishing).
+Do not print the token or pass it on the command line.
 
 If a published version is not ready for downloads, use **More Actions >
 Unpublish**. Do not use **Remove**: Marketplace removal is irreversible, and
@@ -101,9 +123,12 @@ provenance with:
 gh attestation verify harness-lens.vsix --repo harness-lens/harness-lens-vscode
 ```
 
-Both registry jobs verify the complete downloaded `SHA256SUMS` before
+All registry jobs verify the complete downloaded `SHA256SUMS` before
 publishing. npm receives the reviewed tarball from the packaging job; Open VSX
-receives the reviewed VSIX. Neither registry job repackages those artifacts.
+and Visual Studio Marketplace receive the reviewed VSIX. None of the registry
+jobs repackages those artifacts. The checksum identifies the uploaded VSIX and
+GitHub release asset; a registry may apply its own server-side signing or
+delivery processing.
 
 For local verification, run `npm run package` and `npm run sbom`. The SBOM
 command uses `--output-reproducible`; repeated generation from the same
@@ -121,12 +146,15 @@ by the release workflow for its own build artifacts.
 If a package changes, increment SemVer and issue a new release; never replace an
 asset while retaining old checksum or attestation.
 
-Azure DevOps global PATs retire on December 1, 2026. Do not build new PAT-based publishing automation. For future automated Marketplace publishing, configure Microsoft Entra workload identity federation and publish through Azure Pipelines with `vsce publish --azure-credential`.
+Azure DevOps global PATs retire on December 1, 2026. Keep this PAT route
+short-lived and migrate when a stable `@vscode/vsce` release supports direct
+Marketplace trusted publishing from GitHub Actions. Do not adopt a prerelease
+publisher CLI in the release workflow merely to enable that migration early.
 
 ## GitHub setup
 
 1. Create repository `harness-lens/harness-lens-vscode` and push this local repository.
-2. Create environments `npm` and `marketplace`; require reviewers.
+2. Create environments `npm`, `open-vsx`, and `marketplace`; require reviewers.
 3. Enable private vulnerability reporting and Dependabot alerts.
 4. Protect `main`; require pull requests and CI/CodeQL checks.
 5. Protect release tags such as `v*`.
