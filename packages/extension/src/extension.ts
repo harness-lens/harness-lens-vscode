@@ -12,6 +12,7 @@ import {
   type ServerOptions,
 } from "vscode-languageclient/node";
 import { ObservabilityCenter } from "./center.js";
+import { resolveLanguageServerCommand } from "./language-server-path.js";
 import {
   ProviderProtocolService,
   type ProviderStatus,
@@ -158,9 +159,8 @@ function ensureLanguageServer(context: vscode.ExtensionContext): Promise<void> {
   }
 
   languageServerStart = (async () => {
-    const command = configuration.get<string>(
-      "languageServer.path",
-      "harness-lens-lsp",
+    const command = resolveLanguageServerCommand(
+      configuration.get<unknown>("languageServer.path"),
     );
     const args = configuration.get<readonly string[]>(
       "languageServer.arguments",

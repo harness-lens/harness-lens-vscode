@@ -7,6 +7,10 @@ This guide installs the preview VS Code client and native language server on
 Windows using PowerShell. WSL needs Linux binaries and a VS Code WSL extension
 host; replacing drive letters with `/mnt/d` does not translate these commands.
 
+For a release installation that installs both components together, use the
+[coordinated Windows installer](windows-installation.md). Continue here when
+building the server, extension, or CLI from source.
+
 ## Prerequisites
 
 - VS Code
@@ -119,8 +123,8 @@ if ($LASTEXITCODE -ne 0) { throw "VSIX installation failed" }
 ```
 
 If the extension is available in the VS Code Marketplace, install it from the
-Extensions view instead; the language server executable is still configured
-separately unless a future bundle includes it.
+Extensions view instead. You can install the matching native server separately
+as described here or use the coordinated release installer.
 
 ## Configure VS Code
 

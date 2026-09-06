@@ -50,10 +50,6 @@ jobs:
       - name: Generate package SBOMs
         run: npm run sbom
 
-      - name: Write immutable checksums
-        working-directory: artifacts
-        run: sha256sum *.tgz *.vsix *.cdx.json > SHA256SUMS
-
       - name: Attest package build provenance
         uses: actions/attest@v4
         with:
@@ -81,9 +77,95 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  windows-language-server:
+    name: Build Windows language server
+    runs-on: windows-latest
+    timeout-minutes: 20
+    permissions:
+      artifact-metadata: write
+      attestations: write
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout immutable language-server source
+        uses: actions/checkout@v7
+        with:
+          repository: harness-lens/language-server
+          ref: 496f28889b40522676c6d7a59a0b9b2d1af8e700
+          persist-credentials: false
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build native server
+        run: cargo build --locked --release --manifest-path rust/Cargo.toml
+
+      - name: Assemble server archive
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Path artifacts/server | Out-Null
+          Copy-Item rust/target/release/harness-lens-lsp.exe artifacts/server/
+          Copy-Item LICENSE artifacts/server/
+          Compress-Archive -Path artifacts/server/* -DestinationPath artifacts/harness-lens-lsp-windows-x64.zip
+
+      - name: Attest language-server build provenance
+        uses: actions/attest@v4
+        with:
+          subject-path: artifacts/harness-lens-lsp-windows-x64.zip
+
+      - name: Upload server artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: harness-lens-windows-server
+          path: artifacts/harness-lens-lsp-windows-x64.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  assemble-release:
+    name: Assemble release assets
+    needs: [package, windows-language-server]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Download package artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: harness-lens-packages
+          path: artifacts/
+
+      - name: Download Windows language server
+        uses: actions/download-artifact@v8
+        with:
+          name: harness-lens-windows-server
+          path: artifacts/
+
+      - name: Add installer scripts and immutable checksums
+        run: |
+          cp scripts/install-harness-lens.ps1 artifacts/
+          cp scripts/uninstall-harness-lens.ps1 artifacts/
+          cd artifacts
+          sha256sum *.tgz *.vsix *.zip *.ps1 *.cdx.json > SHA256SUMS
+          sha256sum --check SHA256SUMS
+
+      - name: Upload complete release
+        uses: actions/upload-artifact@v7
+        with:
+          name: harness-lens-release
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 7
+
   attach-packages:
     name: Attach packages to GitHub release
-    needs: package
+    needs: assemble-release
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -92,18 +174,18 @@ jobs:
       - name: Download release artifacts
         uses: actions/download-artifact@v8
         with:
-          name: harness-lens-packages
+          name: harness-lens-release
           path: artifacts/
 
-      - name: Attach packages, checksums, and SBOMs
-        run: gh release upload "${{ github.event.release.tag_name }}" artifacts/*.vsix artifacts/*.tgz artifacts/*.cdx.json artifacts/SHA256SUMS
+      - name: Attach packages, installers, checksums, and SBOMs
+        run: gh release upload "${{ github.event.release.tag_name }}" artifacts/*
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
 
   publish-open-vsx:
     name: Publish reviewed VSIX to Open VSX
-    needs: package
+    needs: assemble-release
     if: ${{ vars.OPEN_VSX_PUBLISH_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -129,7 +211,7 @@ jobs:
       - name: Download reviewed release artifacts
         uses: actions/download-artifact@v8
         with:
-          name: harness-lens-packages
+          name: harness-lens-release
           path: artifacts/
 
       - name: Verify downloaded release artifacts
@@ -143,7 +225,7 @@ jobs:
 
   publish-npm:
     name: Publish npm package
-    needs: package
+    needs: assemble-release
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: npm
@@ -178,7 +260,7 @@ jobs:
       - name: Download reviewed release artifacts
         uses: actions/download-artifact@v8
         with:
-          name: harness-lens-packages
+          name: harness-lens-release
           path: artifacts/
 
       - name: Verify downloaded release artifacts

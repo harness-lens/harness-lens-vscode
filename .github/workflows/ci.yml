@@ -50,3 +50,18 @@ jobs:
           path: artifacts/
           if-no-files-found: error
           retention-days: 7
+
+  windows-installer:
+    name: Verify Windows install and uninstall
+    runs-on: windows-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Exercise local fixture installation
+        shell: powershell
+        run: .\scripts\test-windows-installer.ps1
