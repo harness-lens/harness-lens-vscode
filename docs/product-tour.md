@@ -23,7 +23,29 @@ change direction.
 
 ![Harness Lens metrics overview](../packages/extension/media/screenshots/metrics-overview.png)
 
-## Findings and score methods
+## Partial coverage
+
+When a configured scan limit stops discovery, the report identifies the exact
+reason, excludes the partial snapshot from trend comparison, and still exposes
+the bounded files, context, and findings it measured.
+
+![Harness Lens partial workspace overview](../packages/extension/media/screenshots/partial-workspace-overview.png)
+
+## Per-file context
+
+The files table keeps byte size, context estimate, configured cost, finding
+counts, and effectiveness state separate for each discovered asset.
+
+![Harness Lens per-file context](../packages/extension/media/screenshots/per-file-context.png)
+
+## Findings and evidence
+
+Warnings link to their source location and show the rule, human-readable
+message, bounded evidence, and assumptions used by heuristic checks.
+
+![Harness Lens findings with evidence](../packages/extension/media/screenshots/findings-with-evidence.png)
+
+## Scores and methods
 
 Each score exposes its normalized value, threshold, method, sample size, state,
 and reason. Safety violations stay separate from the quality average.
