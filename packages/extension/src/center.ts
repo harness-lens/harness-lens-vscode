@@ -2,7 +2,6 @@
 // Copyright © 2026 Cristian Camargo Filho
 
 import { randomBytes } from "node:crypto";
-import { isAbsolute, relative, resolve } from "node:path";
 import * as vscode from "vscode";
 
 import {
@@ -17,6 +16,7 @@ import {
   type WorkspaceReports,
 } from "./center-model.js";
 import { centerHtml, type CenterViewState } from "./center-view.js";
+import { resolveReportSourcePath } from "./source-path.js";
 
 const historyPrefix = "harnessLens.observability.history";
 
@@ -315,13 +315,14 @@ export class ObservabilityCenter implements vscode.Disposable {
     if (!report || !this.folder) {
       return;
     }
-    const root = resolve(report.root);
-    const candidate = resolve(root, target.path);
-    const child = relative(root, candidate);
-    if (!child || child.startsWith("..") || isAbsolute(child)) {
-      throw new Error("Harness report path leaves the workspace root.");
+    const candidate = resolveReportSourcePath(report.root, target.path);
+    const uri = vscode.Uri.file(candidate);
+    const stat = await vscode.workspace.fs.stat(uri);
+    if ((stat.type & vscode.FileType.Directory) !== 0) {
+      await vscode.commands.executeCommand("revealInExplorer", uri);
+      return;
     }
-    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(candidate));
+    const document = await vscode.workspace.openTextDocument(uri);
     const editor = await vscode.window.showTextDocument(document);
     const line = Math.max(0, Math.min(document.lineCount - 1, (target.line ?? 1) - 1));
     const selection = new vscode.Selection(line, 0, line, 0);

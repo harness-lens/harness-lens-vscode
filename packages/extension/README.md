@@ -11,6 +11,23 @@
 
 Harness Lens is an early VS Code integration for coding-agent instruction files.
 
+## Quick setup on Windows
+
+Install the extension and its matching native language server together from an
+official GitHub release:
+
+```powershell
+$installer = Join-Path $env:TEMP "install-harness-lens.ps1"
+Invoke-WebRequest "https://github.com/harness-lens/harness-lens-vscode/releases/latest/download/install-harness-lens.ps1" -OutFile $installer
+powershell -ExecutionPolicy Bypass -File $installer
+```
+
+See **[Windows install, uninstall, and extra configuration](https://github.com/harness-lens/harness-lens-vscode/blob/main/docs/windows-installation.md)**
+for uninstall instructions, custom server paths, runtime modes, and contributor
+installation. CodeBurn remains optional and separate.
+
+![Harness Lens metrics overview](media/screenshots/metrics-overview.png)
+
 ## Available today
 
 - Discover supported harness files in the current workspace.
@@ -84,8 +101,10 @@ Supported files:
 - Codex config, agents, and rules under `.codex/`
 - compatible rules under `.agents/rules/` and `.cursor/rules/`
 
-See the repository's [manual installation guide](https://github.com/harness-lens/harness-lens-vscode/blob/main/docs/manual-installation.md)
-for Windows, WSL, native language-server, VSIX, and CLI setup.
+See the [product tour](https://github.com/harness-lens/harness-lens-vscode/blob/main/docs/product-tour.md)
+for the Workspace Observer, scores, runtime, plugins, and local history. The
+repository's [manual installation guide](https://github.com/harness-lens/harness-lens-vscode/blob/main/docs/manual-installation.md)
+covers source builds, WSL, native language-server, VSIX, and CLI setup.
 
 Feedback and bug reports are welcome in the [Harness Lens VS Code repository](https://github.com/harness-lens/harness-lens-vscode/issues).
 

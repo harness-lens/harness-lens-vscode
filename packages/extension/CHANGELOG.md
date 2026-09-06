@@ -5,6 +5,11 @@
 
 ## Unreleased
 
+- Add a checksum-verified Windows installer and uninstaller for the VSIX and
+  matching native language server.
+- Discover the coordinated Windows language-server installation automatically.
+- Normalize Windows device paths and reveal referenced directories in Explorer.
+- Add current product captures and direct links to extra configuration.
 - Add typed provider catalog and aggregate protocol services.
 - Require explicit CodeBurn provider consent in addition to runtime mode.
 - Send workspace trust, virtual-workspace, and selected-provider policy during
