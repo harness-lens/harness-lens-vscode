@@ -117,9 +117,9 @@
         },
         "harnessLens.languageServer.path": {
           "type": "string",
-          "default": "harness-lens-lsp",
+          "default": "",
           "scope": "machine",
-          "description": "Path to the harness-lens-lsp executable."
+          "markdownDescription": "Optional path to `harness-lens-lsp`. When empty on Windows, Harness Lens discovers `%LOCALAPPDATA%\\HarnessLens\\bin\\harness-lens-lsp.exe` installed by the official Windows installer, then falls back to `PATH`."
         },
         "harnessLens.languageServer.arguments": {
           "type": "array",

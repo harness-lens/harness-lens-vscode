@@ -65,7 +65,10 @@ the extension name cannot be reused even by the original publisher. An
 unpublished extension remains recorded and API-discoverable, but it cannot be
 downloaded from Marketplace or VS Code.
 
-GitHub releases also attach the VSIX as a downloadable asset.
+GitHub releases also attach the VSIX, checksum-verified Windows install and
+uninstall scripts, and a matching native Windows language-server archive. The
+server build is pinned to the immutable source SHA in `release.yml`; update that
+pin only after the owning language-server change is merged and verified.
 
 ## Open VSX
 
@@ -88,17 +91,19 @@ version, README, changelog, and package checksum for each release.
 
 ## Checksums, SBOMs, and provenance
 
-Release workflow attaches VSIX, npm tarball, CycloneDX JSON SBOMs, and
-`SHA256SUMS`. It creates separate GitHub build provenance and SBOM attestations
-for npm and VSIX packages. Consumers can verify provenance with:
+Release workflow attaches VSIX, npm tarball, Windows language-server archive,
+install and uninstall scripts, CycloneDX JSON SBOMs, and `SHA256SUMS`. It
+creates separate GitHub build provenance for npm, VSIX, and the native server,
+plus SBOM attestations for the npm and VSIX packages. Consumers can verify
+provenance with:
 
 ```bash
 gh attestation verify harness-lens.vsix --repo harness-lens/harness-lens-vscode
 ```
 
-Both registry jobs verify the downloaded `SHA256SUMS` before publishing. npm
-receives the reviewed tarball from the packaging job; Open VSX receives the
-reviewed VSIX. Neither registry job repackages those artifacts.
+Both registry jobs verify the complete downloaded `SHA256SUMS` before
+publishing. npm receives the reviewed tarball from the packaging job; Open VSX
+receives the reviewed VSIX. Neither registry job repackages those artifacts.
 
 For local verification, run `npm run package` and `npm run sbom`. The SBOM
 command uses `--output-reproducible`; repeated generation from the same

@@ -57,6 +57,10 @@ provider catalog, and the metrics center validates aggregate responses before
 use. CodeBurn remains optional, separately installed, MIT-licensed, and
 unbundled; extension never downloads, installs, or updates it.
 
+Windows users can install the VSIX and matching native language server together
+with the [coordinated installer](docs/windows-installation.md). The extension
+automatically discovers its server under `%LOCALAPPDATA%\HarnessLens\bin`.
+
 Install the server from a checkout of the
 [`language-server`](https://github.com/harness-lens/language-server) repository:
 
@@ -87,8 +91,8 @@ Supported files:
 - Codex config, agents, and rules under `.codex/`
 - compatible rules under `.agents/rules/` and `.cursor/rules/`
 
-See the [manual installation guide](docs/manual-installation.md) for Windows,
-WSL, native language-server, VSIX, and CLI setup.
+See the [Windows installation and configuration](docs/windows-installation.md),
+[product tour](docs/product-tour.md), and [manual source-build guide](docs/manual-installation.md).
 
 ## Development
 
