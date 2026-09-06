@@ -19,6 +19,7 @@
     "package": "npm run build && npm run pack:npm && npm run package:extension",
     "package:extension": "npm run build --workspace @harness-lens/vscode && npm run artifacts && npm run package --workspace packages/extension",
     "pack:npm": "npm run artifacts && npm pack --workspace @harness-lens/vscode --pack-destination artifacts",
+    "publish:marketplace": "vsce publish --packagePath artifacts/harness-lens.vsix",
     "publish:open-vsx": "ovsx publish artifacts/harness-lens.vsix",
     "sbom": "npm run artifacts && cyclonedx-npm --workspace @harness-lens/vscode --omit dev --output-reproducible --output-file artifacts/harness-lens-vscode.cdx.json && cyclonedx-npm --workspace harness-lens --omit dev --output-reproducible --output-file artifacts/harness-lens-extension.cdx.json",
     "test": "npm run test --workspace @harness-lens/vscode && npm run test --workspace packages/extension",

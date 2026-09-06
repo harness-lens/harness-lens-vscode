@@ -223,6 +223,49 @@ jobs:
         env:
           OVSX_PAT: ${{ secrets.OVSX_PAT }}
 
+  publish-marketplace:
+    name: Publish reviewed VSIX to Marketplace
+    needs: [assemble-release, attach-packages]
+    if: ${{ vars.VS_MARKETPLACE_PUBLISH_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: marketplace
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download reviewed release artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: harness-lens-release
+          path: artifacts/
+
+      - name: Verify exact release artifacts
+        working-directory: artifacts
+        run: sha256sum --check SHA256SUMS
+
+      - name: Show uploaded VSIX checksum
+        run: sha256sum artifacts/harness-lens.vsix
+
+      - name: Publish the reviewed VSIX without rebuilding
+        run: npm run publish:marketplace
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+
   publish-npm:
     name: Publish npm package
     needs: assemble-release
