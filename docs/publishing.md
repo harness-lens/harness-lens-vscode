@@ -131,8 +131,10 @@ GitHub release asset; a registry may apply its own server-side signing or
 delivery processing.
 
 For local verification, run `npm run package` and `npm run sbom`. The SBOM
-command uses `--output-reproducible`; repeated generation from the same
-dependency tree must produce identical bytes. Then write and verify checksums:
+command uses `--output-reproducible`, then adds a content-derived UUIDv5
+`serialNumber` required by GitHub's CycloneDX attester. Repeated generation
+from the same dependency tree must produce identical bytes. Then write and
+verify checksums:
 
 ```bash
 cd artifacts
@@ -145,6 +147,14 @@ by the release workflow for its own build artifacts.
 
 If a package changes, increment SemVer and issue a new release; never replace an
 asset while retaining old checksum or attestation.
+
+If package generation succeeds but a release run fails before attaching any
+assets, dispatch **Release Packages** from `main` with the existing tag. Leave
+`publish_registries` disabled to recover GitHub downloads only. Recovery checks
+out product source from the release tag, takes release tooling from the reviewed
+workflow revision, rebuilds and attests all artifacts, and refuses to upload if
+the release already has assets. This avoids deleting a release, moving its tag,
+overwriting an asset, or republishing the same registry version.
 
 Azure DevOps global PATs retire on December 1, 2026. Keep this PAT route
 short-lived and migrate when a stable `@vscode/vsce` release supports direct
