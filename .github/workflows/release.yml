@@ -6,6 +6,20 @@ name: Release Packages
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing GitHub release tag to recover
+        required: true
+        type: string
+      publish_registries:
+        description: Also run enabled registry publication jobs
+        required: true
+        default: false
+        type: boolean
+
+env:
+  RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
 
 permissions:
   contents: read
@@ -25,6 +39,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
         with:
+          ref: ${{ env.RELEASE_TAG }}
+          persist-credentials: false
+
+      - name: Checkout recovery tooling
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .release-tooling
           persist-credentials: false
 
       - name: Set up Node.js
@@ -39,7 +62,7 @@ jobs:
       - name: Check release version
         run: npm run check
         env:
-          GITHUB_REF_NAME: ${{ github.event.release.tag_name }}
+          GITHUB_REF_NAME: ${{ env.RELEASE_TAG }}
 
       - name: Run tests
         run: npm test
@@ -49,6 +72,13 @@ jobs:
 
       - name: Generate package SBOMs
         run: npm run sbom
+
+      - name: Add deterministic SBOM serials for recovery
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: >-
+          node .release-tooling/scripts/finalize-cyclonedx-sbom.mjs
+          artifacts/harness-lens-vscode.cdx.json
+          artifacts/harness-lens-extension.cdx.json
 
       - name: Attest package build provenance
         uses: actions/attest@v4
@@ -133,6 +163,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
         with:
+          ref: ${{ env.RELEASE_TAG }}
           persist-credentials: false
 
       - name: Download package artifacts
@@ -177,8 +208,14 @@ jobs:
           name: harness-lens-release
           path: artifacts/
 
+      - name: Require an existing release with no assets
+        run: test "$(gh release view "$RELEASE_TAG" --json assets --jq '.assets | length')" -eq 0
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+
       - name: Attach packages, installers, checksums, and SBOMs
-        run: gh release upload "${{ github.event.release.tag_name }}" artifacts/*
+        run: gh release upload "$RELEASE_TAG" artifacts/*
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -186,7 +223,7 @@ jobs:
   publish-open-vsx:
     name: Publish reviewed VSIX to Open VSX
     needs: assemble-release
-    if: ${{ vars.OPEN_VSX_PUBLISH_ENABLED == 'true' }}
+    if: ${{ vars.OPEN_VSX_PUBLISH_ENABLED == 'true' && (github.event_name == 'release' || inputs.publish_registries) }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: open-vsx
@@ -197,6 +234,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
         with:
+          ref: ${{ env.RELEASE_TAG }}
           persist-credentials: false
 
       - name: Set up Node.js
@@ -226,7 +264,7 @@ jobs:
   publish-marketplace:
     name: Publish reviewed VSIX to Marketplace
     needs: [assemble-release, attach-packages]
-    if: ${{ vars.VS_MARKETPLACE_PUBLISH_ENABLED == 'true' }}
+    if: ${{ vars.VS_MARKETPLACE_PUBLISH_ENABLED == 'true' && (github.event_name == 'release' || inputs.publish_registries) }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: marketplace
@@ -237,6 +275,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
         with:
+          ref: ${{ env.RELEASE_TAG }}
           persist-credentials: false
 
       - name: Set up Node.js
@@ -269,6 +308,7 @@ jobs:
   publish-npm:
     name: Publish npm package
     needs: assemble-release
+    if: ${{ github.event_name == 'release' || inputs.publish_registries }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: npm
@@ -280,6 +320,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
         with:
+          ref: ${{ env.RELEASE_TAG }}
           persist-credentials: false
 
       - name: Set up Node.js
@@ -295,7 +336,7 @@ jobs:
       - name: Check release version
         run: npm run check
         env:
-          GITHUB_REF_NAME: ${{ github.event.release.tag_name }}
+          GITHUB_REF_NAME: ${{ env.RELEASE_TAG }}
 
       - name: Run tests
         run: npm test
