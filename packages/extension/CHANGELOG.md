@@ -5,6 +5,9 @@
 
 ## Unreleased
 
+## 0.0.3
+
+- Add shared repository branding and the packaged Marketplace icon and banner.
 - Add a checksum-verified Windows installer and uninstaller for the VSIX and
   matching native language server.
 - Discover the coordinated Windows language-server installation automatically.

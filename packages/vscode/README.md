@@ -1,6 +1,8 @@
 > SPDX-License-Identifier: MPL-2.0
 > Copyright © 2026 Cristian Camargo Filho
 
+![Harness Lens](https://raw.githubusercontent.com/harness-lens/harness-lens-vscode/main/assets/harness-lens-banner.png)
+
 # @harness-lens/vscode
 
 Reusable harness-file discovery APIs for HarnessLens VS Code integrations.

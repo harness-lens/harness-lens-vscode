@@ -1,6 +1,8 @@
 > SPDX-License-Identifier: MPL-2.0
 > Copyright © 2026 Cristian Camargo Filho
 
+![Harness Lens](assets/harness-lens-banner.png)
+
 # Harness Lens for VS Code
 
 Sibling repository for HarnessLens editor integration and reusable VS Code-facing discovery package.
