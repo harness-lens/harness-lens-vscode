@@ -92,7 +92,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: harness-lens/language-server
-          ref: 496f28889b40522676c6d7a59a0b9b2d1af8e700
+          ref: eacaa3e9808169d1e7a78eece563acf1a23aab3e
           persist-credentials: false
 
       - name: Set up Rust
