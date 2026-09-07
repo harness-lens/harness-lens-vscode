@@ -1,6 +1,8 @@
 > SPDX-License-Identifier: MPL-2.0
 > Copyright © 2026 Cristian Camargo Filho
 
+![Harness Lens](https://raw.githubusercontent.com/harness-lens/harness-lens-vscode/main/assets/harness-lens-banner.png)
+
 # Harness Lens
 
 > **Early preview**
@@ -26,7 +28,7 @@ See **[Windows install, uninstall, and extra configuration](https://github.com/h
 for uninstall instructions, custom server paths, runtime modes, and contributor
 installation. CodeBurn remains optional and separate.
 
-![Harness Lens metrics overview](media/screenshots/metrics-overview.png)
+![Harness Lens metrics overview](https://raw.githubusercontent.com/harness-lens/harness-lens-vscode/main/packages/extension/media/screenshots/metrics-overview.png)
 
 ## Available today
 
