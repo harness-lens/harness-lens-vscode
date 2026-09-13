@@ -59,7 +59,7 @@ export interface LspLocation {
 
 export interface FlowProvenance {
   source: string;
-  method: "statistical";
+  method: "deterministic" | "statistical";
   evidenceIds: readonly string[];
   totalEvidence: number;
   location?: LspLocation;
@@ -359,7 +359,7 @@ function parseNode(value: unknown): ObservedFlowNode {
     kind: "action",
     ...(layer === undefined ? {} : { layer }),
     provenance: boundedList(node.provenance, "observed-flow node provenance", 32)
-      .map(parseProvenance),
+      .map((value) => parseProvenance(value, "deterministic", "node")),
   };
 }
 
@@ -390,14 +390,18 @@ function parseEdge(value: unknown): ObservedFlowEdge {
       window: parseWindow(metric.window, "observed-flow metric window"),
     },
     provenance: boundedList(edge.provenance, "observed-flow edge provenance", 32)
-      .map(parseProvenance),
+      .map((value) => parseProvenance(value, "statistical", "edge")),
   };
 }
 
-function parseProvenance(value: unknown): FlowProvenance {
+function parseProvenance(
+  value: unknown,
+  method: FlowProvenance["method"],
+  owner: "node" | "edge",
+): FlowProvenance {
   const provenance = record(value, "observed-flow provenance");
-  if (provenance.method !== "statistical") {
-    throw new Error("Observed-flow provenance method must be statistical.");
+  if (provenance.method !== method) {
+    throw new Error(`Observed-flow ${owner} provenance method must be ${method}.`);
   }
   const evidenceIds = uniqueBoundedTexts(
     provenance.evidence_ids,
@@ -416,7 +420,7 @@ function parseProvenance(value: unknown): FlowProvenance {
     : parseLocation(provenance.location);
   return {
     source: boundedText(provenance.source, "observed-flow provenance source", 512),
-    method: "statistical",
+    method,
     evidenceIds,
     totalEvidence,
     ...(location === undefined ? {} : { location }),
