@@ -45,7 +45,9 @@ content-safe workspace reports, per-file context and configured input cost,
 findings, score methods, plugin execution, and local comparison history.
 Compatible servers can also supply provider-neutral observed action flow. The
 metrics center renders only measured adjacent transitions as a local CSP-safe
-Sankey plus a keyboard-accessible table; static relationships stay in the tree.
+Sankey plus a keyboard-accessible table; a bounded per-turn token lens below it
+shows measured or explicitly estimated input/output usage, cached input,
+attributed cost, and explicit gaps. Static relationships stay in the tree.
 
 Optional aggregate runtime evidence supports explicit `off`, `live`, and
 `snapshot` modes. CodeBurn provider and runtime mode both default off for each
@@ -68,7 +70,9 @@ Observed flow is independently consent-controlled. Set
 trace JSON. The extension does not analyze or persist the trace. It validates
 the bounded LSP graph response, exposes metric unit, filtered denominator,
 share, sample size, window, provenance, completeness, and filters, and keeps
-unavailable evidence distinct from zero activity.
+unavailable evidence distinct from zero activity. The synchronized turn slider
+highlights the corresponding layered Sankey action without inferring usage from
+static file estimates.
 
 Windows users can install the VSIX and matching native language server together
 with the [coordinated installer](docs/windows-installation.md). The extension

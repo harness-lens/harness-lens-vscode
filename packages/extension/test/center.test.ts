@@ -338,10 +338,26 @@ test("renders populated cyclic Sankey with proportional widths and accessible ta
   assert.match(html, /sample/i);
   assert.match(html, /Layered copies preserve canonical logical identity/);
   assert.match(html, /data-flow-uri="file:\/\/\/workspace\/AGENTS.md"/);
+  assert.match(html, /id="token-lens"[^>]*data-token-turns="3"/);
+  assert.match(html, /id="token-chart"/);
+  assert.match(html, /id="token-turn-slider"[^>]*max="2"/);
+  assert.match(html, /class="token-input"/);
+  assert.match(html, /class="token-output"/);
+  assert.match(html, /class="token-cached"/);
+  assert.match(html, /class="token-gap"/);
+  assert.match(html, /data-token-layer="1" data-token-action="write"/);
+  assert.match(html, /Total tokens<\/dt><dd>120 tokens/);
+  assert.match(html, /Explicitly estimated/);
+  assert.match(html, /Open turn evidence/);
+  assert.match(html, /Sample size 2; showing 3 of 3 matching turns/);
+  assert.match(html, /node\.classList\.toggle\('token-highlight'/);
+  assert.match(html, /tokenSlider\?\.addEventListener\('input'/);
   assert.match(html, /@media \(forced-colors: active\)/);
   assert.match(html, /\.flow-chart-layout \{[^}]*display: flex;[^}]*flex-wrap: nowrap/);
-  assert.match(html, /@media \(max-width: 1000px\) \{ \.flow-chart-layout \{ flex-wrap: wrap; \}/);
+  assert.match(html, /@media \(max-width: 1000px\) \{ \.flow-chart-layout, \.token-lens-layout \{ flex-wrap: wrap; \}/);
   assert.match(html, /\.flow-chart-scroll \{ min-height: 500px; \}/);
+  assert.match(html, /\.flow-chart-layout, \.token-lens-layout \{ flex-wrap: wrap; \}/);
+  assert.match(html, /\.token-slider-label \{ align-items: stretch; flex-direction: column; \}/);
   assert.match(html, /@media \(prefers-reduced-motion: reduce\)/);
   assert.ok(!html.includes(".flow-chart-layout { align-items: start; display: grid"));
   assert.match(html, /value="read"/);
@@ -455,6 +471,62 @@ function flowResponse(availability: GraphAvailability): ObservedFlowResponse {
     sampleSize,
     window: { start: "a", end: "z" },
   });
+  const turns = ready
+    ? [
+        {
+          id: "one",
+          sessionId: "session-a",
+          sequence: 1,
+          layer: 0,
+          observedAt: "a",
+          action: { id: "read", label: "Read", category: "tool" },
+          status: "success" as const,
+          tokenUsage: {
+            inputTokens: 60,
+            outputTokens: 20,
+            cachedInputTokens: 10,
+            totalTokens: 80,
+            estimated: false,
+          },
+          cost: { value: 0.001, unit: "USD", estimated: false },
+        },
+        {
+          id: "two",
+          sessionId: "session-a",
+          sequence: 2,
+          layer: 1,
+          observedAt: "b",
+          action: { id: "write", label: "Write", category: "tool" },
+          status: "success" as const,
+          tokenUsage: {
+            inputTokens: 90,
+            outputTokens: 30,
+            cachedInputTokens: 20,
+            totalTokens: 120,
+            estimated: true,
+          },
+          location: provenance.location,
+        },
+        {
+          id: "three",
+          sessionId: "session-a",
+          sequence: 3,
+          layer: 2,
+          observedAt: "c",
+          action: { id: "read", label: "Read", category: "tool" },
+          status: "success" as const,
+        },
+      ]
+    : availability === "insufficient_evidence"
+      ? [{
+          id: "one",
+          sessionId: "session-a",
+          sequence: 1,
+          layer: 0,
+          action: { id: "read", label: "Read", category: "tool" },
+          status: "success" as const,
+        }]
+      : [];
   return {
     schemaVersion: 1,
     rootUri: "file:///workspace",
@@ -503,6 +575,24 @@ function flowResponse(availability: GraphAvailability): ObservedFlowResponse {
             },
           ]
         : [],
+    },
+    tokenTimeline: {
+      method: "statistical",
+      availability: ready
+        ? "ready"
+        : availability === "empty"
+          ? "empty"
+          : "unavailable",
+      completeness: ready
+        ? { complete: false, reasons: [{ code: "missing_token_usage", count: 1 }] }
+        : availability === "empty"
+          ? { complete: true, reasons: [] }
+          : { complete: false, reasons: [{ code: availability === "unavailable" ? "runtime_off" : "missing_token_usage", count: availability === "unavailable" ? undefined : 1 }] },
+      maxTurns: 512,
+      totalTurns: turns.length,
+      sampleSize: ready ? 2 : 0,
+      unit: "tokens",
+      turns,
     },
   };
 }

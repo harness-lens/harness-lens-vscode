@@ -13,7 +13,9 @@ The observed-flow slice is implemented separately from per-call history:
 provider-neutral LSP projections feed a local accessible Sankey and equivalent
 table. The renderer exposes metric, denominator, share, sample size, window,
 provenance, completeness, active filters, layered cycles, and explicit missing
-evidence states. It does not persist or analyze traces in editor code.
+evidence states. An aligned bounded turn lens visualizes validated token usage,
+cache, cost, and explicit gaps without inferring them from static estimates. It
+does not persist or analyze traces in editor code.
 
 ## This PR stack
 

@@ -15,6 +15,7 @@ import {
   type ObservedFlowFilters,
   type ObservedFlowNode,
   type ObservedFlowResponse,
+  type ObservedFlowTurn,
 } from "./observed-flow-service.js";
 
 export interface CenterViewState {
@@ -76,8 +77,9 @@ function firstLocation(provenance: readonly FlowProvenance[]): FlowProvenance["l
   return provenance.find((value) => value.location)?.location;
 }
 
-function flowFileName(provenance: readonly FlowProvenance[]): string | undefined {
-  const location = firstLocation(provenance);
+function flowLocationFileName(
+  location: FlowProvenance["location"],
+): string | undefined {
   if (!location) {
     return undefined;
   }
@@ -96,11 +98,18 @@ function flowFileName(provenance: readonly FlowProvenance[]): string | undefined
   }
 }
 
-function flowNavigationAttributes(provenance: readonly FlowProvenance[]): string {
-  const location = firstLocation(provenance);
+function flowFileName(provenance: readonly FlowProvenance[]): string | undefined {
+  return flowLocationFileName(firstLocation(provenance));
+}
+
+function flowLocationAttributes(location: FlowProvenance["location"]): string {
   return location
     ? ` data-flow-uri="${escapeHtml(location.uri)}" data-flow-line="${location.range.start.line}" data-flow-character="${location.range.start.character}"`
     : "";
+}
+
+function flowNavigationAttributes(provenance: readonly FlowProvenance[]): string {
+  return flowLocationAttributes(firstLocation(provenance));
 }
 
 function flowProvenanceDetails(provenance: readonly FlowProvenance[]): string {
@@ -232,7 +241,7 @@ function sankeyChart(flow: ObservedFlowResponse): string {
     ], node.provenance));
     const textX = x + nodeWidth + 6;
     const textY = y + Math.max(12, nodeHeight / 2) - (fileName ? 7 : 0);
-    return `<g class="flow-node selectable" tabindex="0" role="button" aria-pressed="false" aria-controls="flow-inspector-content" aria-label="${escapeHtml(`${label}. Select for details.`)}" data-flow-selection="${selection}"${flowNavigationAttributes(node.provenance)}>
+    return `<g class="flow-node selectable" tabindex="0" role="button" aria-pressed="false" aria-controls="flow-inspector-content" aria-label="${escapeHtml(`${label}. Select for details.`)}" data-flow-selection="${selection}" data-flow-layer="${node.layer ?? 0}" data-flow-logical="${escapeHtml(node.logicalId)}"${flowNavigationAttributes(node.provenance)}>
       <rect x="${x}" y="${y}" width="${nodeWidth}" height="${nodeHeight}"><title>${escapeHtml(label)}</title></rect>
       <text><tspan x="${textX}" y="${textY}">${escapeHtml(node.label)} · L${node.layer ?? 0}</tspan>${fileName ? `<tspan class="flow-node-file" x="${textX}" dy="14">${escapeHtml(fileName)}</tspan>` : ""}</text>
     </g>`;
@@ -249,6 +258,112 @@ function sankeyChart(flow: ObservedFlowResponse): string {
       <div id="flow-inspector-content" aria-live="polite"><div class="empty"><strong>Select a flow item</strong><p>Choose a node or transition in the Sankey to inspect its bounded metrics and provenance.</p></div></div>
       ${detailTemplates.join("")}
     </aside>
+  </div>`;
+}
+
+function tokenComponent(value: number | undefined): string {
+  return value === undefined ? "Not supplied" : `${amount(value, 0)} tokens`;
+}
+
+function tokenTurnDetail(
+  turn: ObservedFlowTurn,
+  index: number,
+  total: number,
+): string {
+  const usage = turn.tokenUsage;
+  const fileName = flowLocationFileName(turn.location);
+  const rows: readonly [string, string][] = [
+    ["Turn", `${index + 1} of ${total}`],
+    ["Action", `${turn.action.label} · L${turn.layer}`],
+    ["Session / sequence", `${turn.sessionId} / ${turn.sequence}`],
+    ["Status", turn.status],
+    ["Total tokens", usage ? tokenComponent(usage.totalTokens) : "Not supplied"],
+    ["Input tokens", tokenComponent(usage?.inputTokens)],
+    ["Output tokens", tokenComponent(usage?.outputTokens)],
+    ["Cached input", tokenComponent(usage?.cachedInputTokens)],
+    ["Evidence", usage ? (usage.estimated ? "Explicitly estimated" : "Measured") : "Unavailable"],
+    ["Attributed cost", turn.cost
+      ? `${amount(turn.cost.value, 6)} ${turn.cost.unit} · ${turn.cost.estimated ? "estimated" : "measured"}`
+      : "Not supplied"],
+    ...(turn.observedAt ? [["Observed at", turn.observedAt] as [string, string]] : []),
+    ...(fileName ? [["Evidence file", fileName] as [string, string]] : []),
+  ];
+  const details = rows.map(([term, description]) =>
+    `<div><dt>${escapeHtml(term)}</dt><dd>${escapeHtml(description)}</dd></div>`
+  ).join("");
+  return `<div class="token-turn-detail-content">
+    <div class="token-turn-heading"><small>${escapeHtml(turn.action.category)} · ${escapeHtml(turn.status)}</small><h4>${escapeHtml(turn.action.label)} · L${turn.layer}</h4></div>
+    <dl>${details}</dl>
+    ${turn.location ? `<button type="button" class="link token-open"${flowLocationAttributes(turn.location)}>Open turn evidence</button>` : ""}
+  </div>`;
+}
+
+function tokenLens(flow: ObservedFlowResponse): string {
+  const timeline = flow.tokenTimeline;
+  const completeness = timeline.completeness.complete
+    ? "Complete token evidence"
+    : `Partial token evidence: ${timeline.completeness.reasons.map((reason) => `${reason.code}${reason.count === undefined ? "" : ` (${reason.count})`}`).join(", ")}`;
+  if (timeline.turns.length === 0) {
+    return `<div id="token-lens" class="token-lens">
+      <div class="token-lens-heading"><div><h3>Turn token lens</h3><p>Token consumption along the selected observed flow.</p></div><span>${timeline.sampleSize} samples</span></div>
+      <div class="empty" role="status"><strong>Per-turn token evidence ${escapeHtml(timeline.availability)}</strong><p>No returned turn carries a token measurement. Missing evidence never means zero consumption.</p><p>${escapeHtml(completeness)}</p></div>
+    </div>`;
+  }
+
+  const maximum = Math.max(
+    1,
+    ...timeline.turns.map((turn) => turn.tokenUsage?.totalTokens ?? 0),
+  );
+  const baseline = 126;
+  const maximumBarHeight = 94;
+  const barWidth = 20;
+  const barStep = 34;
+  const chartWidth = Math.max(760, timeline.turns.length * barStep + 42);
+  const sessionBreaks: string[] = [];
+  const bars = timeline.turns.map((turn, index) => {
+    const x = 28 + index * barStep;
+    if (index > 0 && timeline.turns[index - 1]!.sessionId !== turn.sessionId) {
+      sessionBreaks.push(`<line class="token-session-break" x1="${x - 7}" y1="18" x2="${x - 7}" y2="${baseline + 3}"><title>Session boundary</title></line>`);
+    }
+    const usage = turn.tokenUsage;
+    const totalHeight = usage
+      ? Math.max(3, usage.totalTokens / maximum * maximumBarHeight)
+      : 0;
+    const inputHeight = usage && usage.totalTokens > 0 && usage.inputTokens !== undefined
+      ? totalHeight * usage.inputTokens / usage.totalTokens
+      : 0;
+    const outputHeight = usage && usage.totalTokens > 0 && usage.outputTokens !== undefined
+      ? totalHeight * usage.outputTokens / usage.totalTokens
+      : 0;
+    const cachedHeight = usage && usage.totalTokens > 0 && usage.cachedInputTokens !== undefined
+      ? totalHeight * usage.cachedInputTokens / usage.totalTokens
+      : 0;
+    const componentsKnown = usage?.inputTokens !== undefined && usage.outputTokens !== undefined;
+    const shapes = !usage
+      ? `<line class="token-gap" x1="${x}" y1="${baseline - 12}" x2="${x + barWidth}" y2="${baseline - 12}" />`
+      : componentsKnown
+        ? `<rect class="token-input" x="${x}" y="${baseline - inputHeight}" width="${barWidth}" height="${inputHeight}" /><rect class="token-output" x="${x}" y="${baseline - totalHeight}" width="${barWidth}" height="${outputHeight}" />${cachedHeight > 0 ? `<rect class="token-cached" x="${x}" y="${baseline - cachedHeight}" width="${barWidth}" height="${cachedHeight}" />` : ""}`
+        : `<rect class="token-total" x="${x}" y="${baseline - totalHeight}" width="${barWidth}" height="${totalHeight}" />`;
+    const label = usage
+      ? `Turn ${index + 1}, ${turn.action.label}, ${usage.totalTokens} tokens${usage.estimated ? ", estimated" : ", measured"}`
+      : `Turn ${index + 1}, ${turn.action.label}, token evidence unavailable`;
+    return `<g class="token-bar selectable" tabindex="0" role="button" aria-pressed="false" aria-controls="token-turn-detail" aria-label="${escapeHtml(`${label}. Select this turn.`)}" data-token-index="${index}" data-token-layer="${turn.layer}" data-token-action="${escapeHtml(turn.action.id)}">
+      <rect class="token-hit-area" x="${x - 4}" y="18" width="${barWidth + 8}" height="${baseline - 12}" />${shapes}<text class="token-axis-label" x="${x + barWidth / 2}" y="148" text-anchor="middle">${index + 1}</text><title>${escapeHtml(label)}</title>
+    </g>`;
+  }).join("");
+  const templates = timeline.turns.map((turn, index) =>
+    `<template id="token-detail-${index}">${tokenTurnDetail(turn, index, timeline.turns.length)}</template>`
+  ).join("");
+  return `<div id="token-lens" class="token-lens" data-token-turns="${timeline.turns.length}">
+    <div class="token-lens-heading"><div><h3>Turn token lens</h3><p>Slide across turns to compare token consumption while actions load files and produce output.</p></div><span>${timeline.sampleSize} of ${timeline.turns.length} returned turns · ${timeline.method}</span></div>
+    <div class="token-legend" aria-label="Token bar legend"><span class="input">Input</span><span class="output">Output</span><span class="cached">Cached input subset</span><span class="gap">Unavailable</span></div>
+    <div class="token-lens-layout">
+      <div class="token-chart-scroll"><svg id="token-chart" class="token-chart" viewBox="0 0 ${chartWidth} 160" width="${chartWidth}" height="160" role="img" aria-labelledby="token-chart-title token-chart-description"><title id="token-chart-title">Token consumption by observed turn</title><desc id="token-chart-description">Stacked input and output token bars. Cached input is marked within input. Dashed markers are missing evidence, not zero.</desc><line class="token-baseline" x1="18" y1="${baseline}" x2="${chartWidth - 12}" y2="${baseline}" />${sessionBreaks.join("")}${bars}</svg></div>
+      <aside id="token-turn-detail" class="token-turn-detail" aria-live="polite">${tokenTurnDetail(timeline.turns[0]!, 0, timeline.turns.length)}</aside>
+    </div>
+    <label class="token-slider-label" for="token-turn-slider"><span>Observed turn</span><input id="token-turn-slider" type="range" min="0" max="${timeline.turns.length - 1}" value="0" step="1" aria-controls="token-chart token-turn-detail"><output id="token-turn-position" for="token-turn-slider">1 of ${timeline.turns.length}</output></label>
+    <p class="method">${escapeHtml(completeness)}. Sample size ${timeline.sampleSize}; showing ${timeline.turns.length} of ${timeline.totalTurns} matching turns. Bar height uses measured or explicitly estimated total tokens.</p>
+    ${templates}
   </div>`;
 }
 
@@ -352,6 +467,7 @@ function observedFlowSection(
     ${error ? `<div role="alert"><strong>Flow refresh failed. Previous validated projection retained.</strong><p>${escapeHtml(error)}</p></div>` : ""}
     <div class="flow-summary" role="status" aria-live="polite"><strong>${escapeHtml(flowStateMessage(flow))}</strong><p>${escapeHtml(completeness)}.${escapeHtml(stale)}</p><p>Metric: ${escapeHtml(flow.graph.filters.metricUnit)} · ${flow.status.observations} observations · ${flow.status.sessions} sessions · generation ${flow.status.generation}${flow.status.issue ? ` · issue ${escapeHtml(flow.status.issue)}` : ""}</p><p>Active filters: ${escapeHtml(activeFilters)}</p></div>
     ${sankeyChart(flow)}
+    ${tokenLens(flow)}
     ${rows ? `<div class="scroll"><table class="flow-table"><caption>Keyboard-accessible observed transition data. Link thickness above is proportional to the same named value and denominator.</caption><thead><tr><th>Source</th><th>Target</th><th>Measured value</th><th>Filtered denominator</th><th>Share</th><th>Sample</th><th>Window</th><th>Provenance</th></tr></thead><tbody>${rows}</tbody></table></div>` : ""}
     <p class="method">Method: statistical aggregation of originally adjacent sanitized observations. Layered copies preserve canonical logical identity when cycles recur.</p>
   </section>`;
@@ -569,6 +685,40 @@ export function centerHtml(state: CenterViewState, nonce: string): string {
   .flow-provenance li { display: flex; flex-direction: column; gap: 3px; }
   .flow-provenance span { color: var(--vscode-descriptionForeground); }
   .flow-table caption { color: var(--vscode-descriptionForeground); padding: 8px; text-align: left; }
+  .token-lens { border: 1px solid var(--vscode-panel-border); margin: 14px 0; padding: 14px; }
+  .token-lens-heading { align-items: flex-start; display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; }
+  .token-lens-heading h3 { margin: 0; }
+  .token-lens-heading p { color: var(--vscode-descriptionForeground); margin: 3px 0 10px; }
+  .token-lens-heading > span { color: var(--vscode-descriptionForeground); }
+  .token-legend { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 4px 0 10px; }
+  .token-legend span::before { border: 1px solid currentColor; content: ""; display: inline-block; height: 9px; margin-right: 5px; width: 12px; }
+  .token-legend .input::before { background: var(--vscode-charts-blue); }
+  .token-legend .output::before { background: var(--vscode-charts-green); }
+  .token-legend .cached::before { background: var(--vscode-charts-purple, var(--vscode-charts-orange)); }
+  .token-legend .gap::before { border-style: dashed; }
+  .token-lens-layout { align-items: stretch; display: flex; flex-wrap: nowrap; gap: 12px; min-width: 0; }
+  .token-chart-scroll { border: 1px solid var(--vscode-panel-border); display: flex; flex: 1 1 620px; min-width: 0; overflow: auto; transition: flex-basis 180ms ease; }
+  .token-chart { background: var(--vscode-editor-background); display: block; flex: 0 0 auto; }
+  .token-baseline, .token-session-break { stroke: var(--vscode-panel-border); stroke-width: 1; }
+  .token-session-break { stroke-dasharray: 3 4; }
+  .token-hit-area { fill: transparent; stroke: transparent; stroke-width: 2; }
+  .token-input, .token-total { fill: var(--vscode-charts-blue); }
+  .token-output { fill: var(--vscode-charts-green); }
+  .token-cached { fill: var(--vscode-charts-purple, var(--vscode-charts-orange)); opacity: .8; }
+  .token-gap { stroke: var(--vscode-descriptionForeground); stroke-dasharray: 3 3; stroke-width: 3; }
+  .token-axis-label { fill: var(--vscode-descriptionForeground); font-size: 9px; }
+  .token-bar:focus .token-hit-area, .token-bar:hover .token-hit-area, .token-bar[aria-pressed="true"] .token-hit-area { stroke: var(--vscode-focusBorder); }
+  .token-bar[aria-pressed="true"] { filter: brightness(1.2); }
+  .flow-node.token-highlight rect { fill: var(--vscode-charts-orange, var(--vscode-focusBorder)); stroke-width: 2; }
+  .token-turn-detail { border: 1px solid var(--vscode-panel-border); box-sizing: border-box; display: flex; flex: 0 1 320px; flex-direction: column; max-width: 360px; min-width: 240px; padding: 12px; transition: flex-basis 180ms ease, max-width 180ms ease; }
+  .token-turn-detail h4 { margin: 3px 0 10px; }
+  .token-turn-detail dl { display: flex; flex-direction: column; gap: 6px; margin: 0 0 10px; }
+  .token-turn-detail dl div { border-bottom: 1px solid var(--vscode-panel-border); padding-bottom: 5px; }
+  .token-turn-detail dt { color: var(--vscode-descriptionForeground); font-size: 10px; text-transform: uppercase; }
+  .token-turn-detail dd { margin: 1px 0 0; overflow-wrap: anywhere; }
+  .token-slider-label { align-items: center; display: flex; gap: 10px; margin: 12px 0 4px; }
+  .token-slider-label input { flex: 1 1 auto; min-width: 0; padding: 0; }
+  .token-slider-label output { min-width: 70px; text-align: right; }
   section, article { border: 1px solid var(--vscode-panel-border); background: var(--vscode-sideBar-background); }
   section { padding: 16px; } section > p, .section-title p { color: var(--vscode-descriptionForeground); margin: 5px 0 14px; }
   .summary { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
@@ -588,10 +738,10 @@ export function centerHtml(state: CenterViewState, nonce: string): string {
   .improving, .pass { color: var(--vscode-testing-iconPassed); } .degrading, .error { color: var(--vscode-testing-iconFailed); } .warning { color: var(--vscode-editorWarning-foreground); } .stable, .info { color: var(--vscode-editorInfo-foreground); } .insufficient_evidence, .unknown { color: var(--vscode-descriptionForeground); }
   .trend { height: 120px; width: 100%; } .trend line { stroke: currentColor; opacity: .2; } .trend polyline { fill: none; stroke: var(--vscode-charts-blue); stroke-width: 2; }
   .method, .empty { color: var(--vscode-descriptionForeground); } .empty { padding: 22px; text-align: center; }
-  @media (forced-colors: active) { .flow-edge { opacity: 1; stroke: LinkText; } .flow-edge[aria-pressed="true"] { stroke: Highlight; } .flow-node rect { fill: Canvas; stroke: CanvasText; stroke-width: 2; } .flow-node[aria-pressed="true"] rect { fill: Highlight; } .flow-state, .flow-summary { border-color: CanvasText; } }
-  @media (max-width: 1000px) { .flow-chart-layout { flex-wrap: wrap; } .flow-chart-scroll { flex-basis: 100%; min-height: 460px; } .flow-inspector { flex: 1 1 100%; max-width: none; min-height: 300px; position: static; } }
-  @media (max-width: 700px) { header { padding: 14px; } main { padding: 14px; } .summary { grid-template-columns: 1fr 1fr; } .flow-filter-grid label { flex-basis: 100%; } .flow-chart-scroll { min-height: 500px; } .flow-inspector { min-width: 0; } .history-toolbar { align-items: stretch; } .history-search, .history-search input { width: 100%; } }
-  @media (prefers-reduced-motion: reduce) { .flow-chart-scroll, .flow-inspector { transition: none; } }
+  @media (forced-colors: active) { .flow-edge { opacity: 1; stroke: LinkText; } .flow-edge[aria-pressed="true"] { stroke: Highlight; } .flow-node rect, .token-input, .token-output, .token-total, .token-cached { fill: Canvas; stroke: CanvasText; stroke-width: 2; } .flow-node[aria-pressed="true"] rect, .flow-node.token-highlight rect, .token-bar[aria-pressed="true"] .token-hit-area { fill: Highlight; stroke: Highlight; } .flow-state, .flow-summary, .token-lens { border-color: CanvasText; } }
+  @media (max-width: 1000px) { .flow-chart-layout, .token-lens-layout { flex-wrap: wrap; } .flow-chart-scroll { flex-basis: 100%; min-height: 460px; } .flow-inspector { flex: 1 1 100%; max-width: none; min-height: 300px; position: static; } .token-chart-scroll { flex-basis: 100%; } .token-turn-detail { flex: 1 1 100%; max-width: none; min-width: 0; } }
+  @media (max-width: 700px) { header { padding: 14px; } main { padding: 14px; } .summary { grid-template-columns: 1fr 1fr; } .flow-filter-grid label { flex-basis: 100%; } .flow-chart-scroll { min-height: 500px; } .flow-inspector { min-width: 0; } .token-lens { padding: 10px; } .token-slider-label { align-items: stretch; flex-direction: column; } .token-slider-label output { text-align: left; } .history-toolbar { align-items: stretch; } .history-search, .history-search input { width: 100%; } }
+  @media (prefers-reduced-motion: reduce) { .flow-chart-scroll, .flow-inspector, .token-chart-scroll, .token-turn-detail { transition: none; } }
 </style></head><body>
 <header><div><h1>Harness Lens</h1><small>Evidence-backed workspace observability</small></div><button id="refresh">Refresh report</button></header>
 ${state.report ? '<nav aria-label="Metrics sections"><a href="#overview">Overview</a><a href="#files">Files and skills</a><a href="#findings">Findings</a><a href="#scores">Scores</a><a href="#runtime">Runtime</a><a href="#flow">Observed flow</a><a href="#plugins">Plugins</a><a href="#history">History</a></nav>' : ""}
@@ -667,11 +817,48 @@ ${state.report ? '<nav aria-label="Metrics sections"><a href="#overview">Overvie
   renderHistory();
   document.querySelectorAll('[data-open]').forEach((element) => element.addEventListener('click', () => vscode.postMessage({ type: 'open', path: element.dataset.open, line: Number(element.dataset.line || 1) })));
   const openFlow = element => vscode.postMessage({ type: 'flow-open', uri: element.dataset.flowUri, line: Number(element.dataset.flowLine), character: Number(element.dataset.flowCharacter) });
-  document.querySelectorAll('[data-flow-uri]').forEach((element) => {
+  document.querySelectorAll('[data-flow-uri]:not(.token-open)').forEach((element) => {
     element.addEventListener('click', () => openFlow(element));
     element.addEventListener('keydown', event => {
       if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openFlow(element); }
     });
+  });
+  const tokenSlider = document.getElementById('token-turn-slider');
+  const tokenPosition = document.getElementById('token-turn-position');
+  const tokenDetail = document.getElementById('token-turn-detail');
+  const tokenBars = [...document.querySelectorAll('[data-token-index]')];
+  const selectTokenTurn = (index, reveal = true) => {
+    const selectedIndex = Math.max(0, Math.min(tokenBars.length - 1, Number(index)));
+    const bar = tokenBars[selectedIndex];
+    const template = document.getElementById('token-detail-' + selectedIndex);
+    if (!bar || !tokenDetail || !template?.content) return;
+    if (tokenSlider) tokenSlider.value = String(selectedIndex);
+    if (tokenPosition) tokenPosition.textContent = (selectedIndex + 1) + ' of ' + tokenBars.length;
+    for (const candidate of tokenBars) {
+      candidate.setAttribute('aria-pressed', String(candidate === bar));
+    }
+    document.querySelectorAll('.flow-node').forEach(node => {
+      node.classList.toggle('token-highlight', node.dataset.flowLayer === bar.dataset.tokenLayer && node.dataset.flowLogical === bar.dataset.tokenAction);
+    });
+    tokenDetail.replaceChildren(template.content.cloneNode(true));
+    const scroller = bar.closest('.token-chart-scroll');
+    if (reveal && scroller) {
+      const barBounds = bar.getBoundingClientRect();
+      const scrollerBounds = scroller.getBoundingClientRect();
+      scroller.scrollLeft += barBounds.left - scrollerBounds.left - (scrollerBounds.width - barBounds.width) / 2;
+    }
+  };
+  tokenBars.forEach((bar) => {
+    bar.addEventListener('click', () => selectTokenTurn(bar.dataset.tokenIndex));
+    bar.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectTokenTurn(bar.dataset.tokenIndex); }
+    });
+  });
+  tokenSlider?.addEventListener('input', event => selectTokenTurn(event.target.value));
+  if (tokenBars.length > 0) selectTokenTurn(0, false);
+  tokenDetail?.addEventListener('click', event => {
+    const evidence = event.target?.closest?.('[data-flow-uri]');
+    if (evidence) openFlow(evidence);
   });
   const flowInspector = document.getElementById('flow-inspector-content');
   const inspectFlow = element => {
@@ -682,6 +869,8 @@ ${state.report ? '<nav aria-label="Metrics sections"><a href="#overview">Overvie
       candidate.setAttribute('aria-pressed', String(candidate.dataset.flowSelection === selection));
     });
     flowInspector.replaceChildren(template.content.cloneNode(true));
+    const matchingTurn = tokenBars.find(bar => bar.dataset.tokenLayer === element.dataset.flowLayer && bar.dataset.tokenAction === element.dataset.flowLogical);
+    if (matchingTurn) selectTokenTurn(matchingTurn.dataset.tokenIndex);
   };
   document.querySelectorAll('[data-flow-selection]').forEach((element) => {
     element.addEventListener('click', () => inspectFlow(element));
