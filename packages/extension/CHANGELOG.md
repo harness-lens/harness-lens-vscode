@@ -12,6 +12,7 @@
   evidence availability.
 - Add a right-side Sankey inspector for selected actions and transitions,
   including bounded metrics, provenance, and side-by-side evidence navigation.
+- Show the bounded evidence filename beneath each navigable Sankey action.
 - Add client-side search and ten-row, bottom-centered pagination to local
   report history.
 

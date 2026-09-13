@@ -325,6 +325,9 @@ test("renders populated cyclic Sankey with proportional widths and accessible ta
   assert.match(html, /data-flow-selection="node-0"/);
   assert.match(html, /data-flow-selection="edge-0"[^>]+data-flow-uri="file:\/\/\/workspace\/AGENTS\.md"/);
   assert.match(html, /data-flow-selection="node-1"[^>]+data-flow-uri="file:\/\/\/workspace\/AGENTS\.md"/);
+  assert.match(html, /<tspan[^>]*>Write · L1<\/tspan>/);
+  assert.match(html, /<tspan class="flow-node-file"[^>]*>AGENTS\.md<\/tspan>/);
+  assert.match(html, /Evidence file<\/dt><dd>AGENTS\.md/);
   assert.match(html, /aria-controls="flow-inspector-content"/);
   assert.match(html, /Observed transition/);
   assert.match(html, /Action node/);

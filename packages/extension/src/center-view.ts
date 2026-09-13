@@ -76,6 +76,26 @@ function firstLocation(provenance: readonly FlowProvenance[]): FlowProvenance["l
   return provenance.find((value) => value.location)?.location;
 }
 
+function flowFileName(provenance: readonly FlowProvenance[]): string | undefined {
+  const location = firstLocation(provenance);
+  if (!location) {
+    return undefined;
+  }
+  try {
+    const segment = new URL(location.uri).pathname.split("/").filter(Boolean).at(-1);
+    if (!segment) {
+      return undefined;
+    }
+    try {
+      return decodeURIComponent(segment);
+    } catch {
+      return segment;
+    }
+  } catch {
+    return undefined;
+  }
+}
+
 function flowNavigationAttributes(provenance: readonly FlowProvenance[]): string {
   const location = firstLocation(provenance);
   return location
@@ -198,19 +218,23 @@ function sankeyChart(flow: ObservedFlowResponse): string {
     return `<path class="flow-edge selectable" d="M ${sourceX} ${sourceY} C ${sourceX + bend} ${sourceY}, ${targetX - bend} ${targetY}, ${targetX} ${targetY}" stroke-width="${thickness}" tabindex="0" role="button" aria-pressed="false" aria-controls="flow-inspector-content" aria-label="${escapeHtml(`${label}. Select for details.`)}" data-flow-selection="${selection}"${flowNavigationAttributes(edge.provenance)}><title>${escapeHtml(label)}</title></path>`;
   }).join("");
   const nodes = [...positioned.values()].map(({ node, x, y, height: nodeHeight }, index) => {
-    const label = `${node.label}; canonical identity ${node.logicalId}; layer ${node.layer ?? 0}`;
+    const fileName = flowFileName(node.provenance);
+    const label = `${node.label}; canonical identity ${node.logicalId}; layer ${node.layer ?? 0}${fileName ? `; evidence file ${fileName}` : ""}`;
     const incoming = flow.graph.edges.filter((edge) => edge.target === node.id);
     const outgoing = flow.graph.edges.filter((edge) => edge.source === node.id);
     const selection = `node-${index}`;
     detailTemplates.push(flowDetail(selection, "node", node.label, [
       ["Canonical identity", node.logicalId],
       ["Sequence layer", String(node.layer ?? 0)],
+      ...(fileName ? [["Evidence file", fileName] as [string, string]] : []),
       ["Incoming transitions", `${incoming.length} · ${amount(incoming.reduce((sum, edge) => sum + edge.metric.value, 0), 6)} ${flow.graph.filters.metricUnit}`],
       ["Outgoing transitions", `${outgoing.length} · ${amount(outgoing.reduce((sum, edge) => sum + edge.metric.value, 0), 6)} ${flow.graph.filters.metricUnit}`],
     ], node.provenance));
+    const textX = x + nodeWidth + 6;
+    const textY = y + Math.max(12, nodeHeight / 2) - (fileName ? 7 : 0);
     return `<g class="flow-node selectable" tabindex="0" role="button" aria-pressed="false" aria-controls="flow-inspector-content" aria-label="${escapeHtml(`${label}. Select for details.`)}" data-flow-selection="${selection}"${flowNavigationAttributes(node.provenance)}>
       <rect x="${x}" y="${y}" width="${nodeWidth}" height="${nodeHeight}"><title>${escapeHtml(label)}</title></rect>
-      <text x="${x + nodeWidth + 6}" y="${y + Math.max(12, nodeHeight / 2)}">${escapeHtml(node.label)} · L${node.layer ?? 0}</text>
+      <text><tspan x="${textX}" y="${textY}">${escapeHtml(node.label)} · L${node.layer ?? 0}</tspan>${fileName ? `<tspan class="flow-node-file" x="${textX}" dy="14">${escapeHtml(fileName)}</tspan>` : ""}</text>
     </g>`;
   }).join("");
   const denominator = flow.graph.edges[0]!.metric.denominator;
@@ -532,6 +556,7 @@ export function centerHtml(state: CenterViewState, nonce: string): string {
   .flow-edge[aria-pressed="true"] { opacity: 1; stroke: var(--vscode-charts-orange, var(--vscode-focusBorder)); }
   .flow-node rect { fill: var(--vscode-charts-blue); stroke: var(--vscode-foreground); stroke-width: 1; }
   .flow-node text { fill: var(--vscode-foreground); font-size: 11px; }
+  .flow-node-file { fill: var(--vscode-descriptionForeground); font-size: 9px; }
   .flow-node:focus rect, .flow-node:hover rect { stroke: var(--vscode-focusBorder); stroke-width: 2; }
   .flow-node[aria-pressed="true"] rect { fill: var(--vscode-charts-orange, var(--vscode-focusBorder)); stroke-width: 2; }
   .flow-inspector { border: 1px solid var(--vscode-panel-border); min-height: 280px; padding: 14px; position: sticky; top: 90px; }
