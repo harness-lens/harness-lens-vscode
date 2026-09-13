@@ -195,7 +195,7 @@ function sankeyChart(flow: ObservedFlowResponse): string {
       ["Observation window", `${edge.metric.window.start} through ${edge.metric.window.end}`],
       ["Method", edge.method],
     ], edge.provenance));
-    return `<path class="flow-edge selectable" d="M ${sourceX} ${sourceY} C ${sourceX + bend} ${sourceY}, ${targetX - bend} ${targetY}, ${targetX} ${targetY}" stroke-width="${thickness}" tabindex="0" role="button" aria-pressed="false" aria-controls="flow-inspector-content" aria-label="${escapeHtml(`${label}. Select for details.`)}" data-flow-selection="${selection}"><title>${escapeHtml(label)}</title></path>`;
+    return `<path class="flow-edge selectable" d="M ${sourceX} ${sourceY} C ${sourceX + bend} ${sourceY}, ${targetX - bend} ${targetY}, ${targetX} ${targetY}" stroke-width="${thickness}" tabindex="0" role="button" aria-pressed="false" aria-controls="flow-inspector-content" aria-label="${escapeHtml(`${label}. Select for details.`)}" data-flow-selection="${selection}"${flowNavigationAttributes(edge.provenance)}><title>${escapeHtml(label)}</title></path>`;
   }).join("");
   const nodes = [...positioned.values()].map(({ node, x, y, height: nodeHeight }, index) => {
     const label = `${node.label}; canonical identity ${node.logicalId}; layer ${node.layer ?? 0}`;
@@ -208,7 +208,7 @@ function sankeyChart(flow: ObservedFlowResponse): string {
       ["Incoming transitions", `${incoming.length} · ${amount(incoming.reduce((sum, edge) => sum + edge.metric.value, 0), 6)} ${flow.graph.filters.metricUnit}`],
       ["Outgoing transitions", `${outgoing.length} · ${amount(outgoing.reduce((sum, edge) => sum + edge.metric.value, 0), 6)} ${flow.graph.filters.metricUnit}`],
     ], node.provenance));
-    return `<g class="flow-node selectable" tabindex="0" role="button" aria-pressed="false" aria-controls="flow-inspector-content" aria-label="${escapeHtml(`${label}. Select for details.`)}" data-flow-selection="${selection}">
+    return `<g class="flow-node selectable" tabindex="0" role="button" aria-pressed="false" aria-controls="flow-inspector-content" aria-label="${escapeHtml(`${label}. Select for details.`)}" data-flow-selection="${selection}"${flowNavigationAttributes(node.provenance)}>
       <rect x="${x}" y="${y}" width="${nodeWidth}" height="${nodeHeight}"><title>${escapeHtml(label)}</title></rect>
       <text x="${x + nodeWidth + 6}" y="${y + Math.max(12, nodeHeight / 2)}">${escapeHtml(node.label)} · L${node.layer ?? 0}</text>
     </g>`;
