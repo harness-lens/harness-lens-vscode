@@ -10,6 +10,10 @@
 - Add a provider-neutral, accessible Sankey and equivalent table for measured
   adjacent action transitions, with bounded server-side filters and explicit
   evidence availability.
+- Add a right-side Sankey inspector for selected actions and transitions,
+  including bounded metrics, provenance, and evidence navigation.
+- Add client-side search and ten-row, bottom-centered pagination to local
+  report history.
 
 ## 0.0.3
 

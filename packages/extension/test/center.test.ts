@@ -319,6 +319,13 @@ test("renders populated cyclic Sankey with proportional widths and accessible ta
     },
   }, "nonce");
   assert.match(html, /class="flow-chart"/);
+  assert.match(html, /id="flow-inspector"/);
+  assert.match(html, /Select a flow item/);
+  assert.match(html, /data-flow-selection="edge-0"/);
+  assert.match(html, /data-flow-selection="node-0"/);
+  assert.match(html, /aria-controls="flow-inspector-content"/);
+  assert.match(html, /Observed transition/);
+  assert.match(html, /Action node/);
   assert.match(html, /Keyboard-accessible observed transition data/);
   assert.match(html, /Filtered denominator/);
   assert.match(html, /3 transitions/);
@@ -332,6 +339,30 @@ test("renders populated cyclic Sankey with proportional widths and accessible ta
     .map((match) => Number(match[1]));
   assert.equal(widths.length, 2);
   assert.ok(Math.abs(widths[0]! / widths[1]! - 3) < 1e-9);
+});
+
+test("renders searchable, paginated local history controls", () => {
+  const value = report();
+  const history = Array.from({ length: 12 }, (_, index) => ({
+    ...snapshot(value, `2026-09-${String(index + 1).padStart(2, "0")}T10:00:00Z`),
+    files: index + 1,
+  }));
+  const html = centerHtml({
+    report: value,
+    history,
+    flowFilters: defaultObservedFlowFilters,
+  }, "nonce");
+
+  assert.equal([...html.matchAll(/<tr data-history-row>/g)].length, 12);
+  assert.match(html, /id="history" data-history-page-size="10"/);
+  assert.match(html, /id="history-search" type="search"/);
+  assert.match(html, /id="history-previous"/);
+  assert.match(html, /id="history-page-status"/);
+  assert.match(html, /id="history-next"/);
+  assert.match(html, /\.history-pagination \{[^}]*justify-content: center/);
+  assert.match(html, /Math\.ceil\(matching\.length \/ historyPageSize\)/);
+  assert.ok(html.indexOf('id="history-search"') < html.indexOf("data-history-row"));
+  assert.ok(html.lastIndexOf("<tr data-history-row>") < html.indexOf('id="history-next"'));
 });
 
 test("renders unavailable, insufficient, empty, partial, truncated, and filtered states", () => {
