@@ -40,6 +40,18 @@ test("rejects static inference, inconsistent width semantics, and unsafe navigat
     .provenance as Record<string, unknown>[];
   (provenance[0]!.location as Record<string, unknown>).uri = "https://example.invalid/source";
   assert.throws(() => parseObservedFlow(badLocation), /file scheme/);
+
+  const statisticalNode = populatedResponse();
+  const nodeProvenance = (statisticalNode.graph.nodes as Record<string, unknown>[])[0]!
+    .provenance as Record<string, unknown>[];
+  nodeProvenance[0]!.method = "statistical";
+  assert.throws(() => parseObservedFlow(statisticalNode), /node provenance method must be deterministic/);
+
+  const deterministicEdge = populatedResponse();
+  const edgeProvenance = (deterministicEdge.graph.edges as Record<string, unknown>[])[0]!
+    .provenance as Record<string, unknown>[];
+  edgeProvenance[0]!.method = "deterministic";
+  assert.throws(() => parseObservedFlow(deterministicEdge), /edge provenance method must be statistical/);
 });
 
 test("normalizes supported filters and rejects incomplete windows or cost units", () => {
@@ -125,9 +137,13 @@ function unavailableResponse(): Record<string, unknown> {
 }
 
 function populatedResponse(): Record<string, any> {
-  const provenance = (id: string, location = false): Record<string, unknown> => ({
+  const provenance = (
+    id: string,
+    method: "deterministic" | "statistical",
+    location = false,
+  ): Record<string, unknown> => ({
     source: "harness-lens-sdk",
-    method: "statistical",
+    method,
     evidence_ids: [id],
     total_evidence: 1,
     ...(location ? {
@@ -160,9 +176,9 @@ function populatedResponse(): Record<string, any> {
       limits: { max_nodes: 256, max_edges: 512, max_hops: 32 },
       filters: { metric_unit: "transitions" },
       nodes: [
-        { id: "n0", logical_id: "read", label: "Read", kind: "action", layer: 0, provenance: [provenance("one")] },
-        { id: "n1", logical_id: "write", label: "Write", kind: "action", layer: 1, provenance: [provenance("two", true)] },
-        { id: "n2", logical_id: "read", label: "Read", kind: "action", layer: 2, provenance: [provenance("three")] },
+        { id: "n0", logical_id: "read", label: "Read", kind: "action", layer: 0, provenance: [provenance("one", "deterministic")] },
+        { id: "n1", logical_id: "write", label: "Write", kind: "action", layer: 1, provenance: [provenance("two", "deterministic", true)] },
+        { id: "n2", logical_id: "read", label: "Read", kind: "action", layer: 2, provenance: [provenance("three", "deterministic")] },
       ],
       edges: [
         {
@@ -179,7 +195,7 @@ function populatedResponse(): Record<string, any> {
             sample_size: 3,
             window: { start: "a", end: "z" },
           },
-          provenance: [provenance("two", true)],
+          provenance: [provenance("two", "statistical", true)],
         },
         {
           id: "e1",
@@ -195,7 +211,7 @@ function populatedResponse(): Record<string, any> {
             sample_size: 1,
             window: { start: "a", end: "z" },
           },
-          provenance: [provenance("three")],
+          provenance: [provenance("three", "statistical")],
         },
       ],
     },
