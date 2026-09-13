@@ -12,6 +12,11 @@ import {
   type AnalysisReport,
 } from "../src/center-model.ts";
 import { centerHtml, escapeHtml } from "../src/center-view.ts";
+import {
+  defaultObservedFlowFilters,
+  type GraphAvailability,
+  type ObservedFlowResponse,
+} from "../src/observed-flow-service.ts";
 
 function report(): AnalysisReport {
   return {
@@ -252,6 +257,7 @@ test("renders safe per-file metrics and explicit runtime gaps", () => {
   const html = centerHtml({
     report: value,
     history: [snapshot(value)],
+    flowFilters: defaultObservedFlowFilters,
     runtime: {
       mode: "live",
       state: "ready",
@@ -269,7 +275,7 @@ test("renders safe per-file metrics and explicit runtime gaps", () => {
   assert.match(html, /Requires attributed runtime outcomes/);
   assert.match(html, /Runtime history/);
   assert.match(html, /12 calls/);
-  assert.match(html, /Tool errors, retries, timeouts/);
+  assert.match(html, /Sanitized ordered action evidence is shown separately/);
   assert.equal(escapeHtml("<&"), "&lt;&amp;");
 });
 
@@ -277,6 +283,7 @@ test("marks a retained report stale when refresh fails without rendering raw err
   const html = centerHtml({
     report: report(),
     history: [],
+    flowFilters: defaultObservedFlowFilters,
     error: '<img src=x onerror="alert(1)">',
   }, "nonce");
   assert.match(html, /role="alert"/);
@@ -284,3 +291,176 @@ test("marks a retained report stale when refresh fails without rendering raw err
   assert.ok(!html.includes('<img src=x'));
   assert.match(html, /&lt;img src=x/);
 });
+
+test("renders populated cyclic Sankey with proportional widths and accessible table", () => {
+  const flow = flowResponse("ready");
+  flow.graph.limits.maxHops = 4;
+  flow.graph.filters = {
+    root: "read",
+    window: { start: "a", end: "z" },
+    categories: ["tool"],
+    statuses: ["success"],
+    minimumShare: 0.1,
+    metricUnit: "transitions",
+  };
+  const html = centerHtml({
+    report: report(),
+    history: [],
+    flow,
+    flowFilters: {
+      root: "read",
+      maxHops: 4,
+      windowStart: "a",
+      windowEnd: "z",
+      categories: ["tool"],
+      statuses: ["success"],
+      minimumShare: 0.1,
+      metric: "transitions",
+    },
+  }, "nonce");
+  assert.match(html, /class="flow-chart"/);
+  assert.match(html, /Keyboard-accessible observed transition data/);
+  assert.match(html, /Filtered denominator/);
+  assert.match(html, /3 transitions/);
+  assert.match(html, /sample/i);
+  assert.match(html, /Layered copies preserve canonical logical identity/);
+  assert.match(html, /data-flow-uri="file:\/\/\/workspace\/AGENTS.md"/);
+  assert.match(html, /@media \(forced-colors: active\)/);
+  assert.match(html, /value="read"/);
+  assert.match(html, /Active filters: root read/);
+  const widths = [...html.matchAll(/class="flow-edge[^>]+stroke-width="([^"]+)"/g)]
+    .map((match) => Number(match[1]));
+  assert.equal(widths.length, 2);
+  assert.ok(Math.abs(widths[0]! / widths[1]! - 3) < 1e-9);
+});
+
+test("renders unavailable, insufficient, empty, partial, truncated, and filtered states", () => {
+  const cases: readonly [GraphAvailability, RegExp][] = [
+    ["unavailable", /missing evidence, not zero activity/i],
+    ["insufficient_evidence", /cannot establish an ordered transition/i],
+    ["empty", /no transitions matching the active filters/i],
+  ];
+  for (const [availability, expected] of cases) {
+    const html = centerHtml({
+      report: report(),
+      history: [],
+      flow: flowResponse(availability),
+      flowFilters: defaultObservedFlowFilters,
+    }, "nonce");
+    assert.match(html, expected);
+    assert.ok(!html.includes('class="flow-chart"'));
+  }
+
+  const partial = flowResponse("ready");
+  partial.status.state = "partial";
+  partial.graph.completeness = {
+    complete: false,
+    reasons: [{ code: "truncated_edges", count: 2 }],
+  };
+  partial.graph.filters = {
+    ...partial.graph.filters,
+    categories: ["tool"],
+    statuses: ["timeout"],
+    minimumShare: 0.2,
+  };
+  const html = centerHtml({
+    report: report(),
+    history: [],
+    flow: partial,
+    flowFilters: {
+      ...defaultObservedFlowFilters,
+      categories: ["tool"],
+      statuses: ["timeout"],
+      minimumShare: 0.2,
+    },
+  }, "nonce");
+  assert.match(html, /partial \/ ready/i);
+  assert.match(html, /Partial: truncated_edges \(2\)/);
+  assert.match(html, /categories tool/);
+  assert.match(html, /statuses timeout/);
+  assert.match(html, /minimum share 0.2/);
+});
+
+function flowResponse(availability: GraphAvailability): ObservedFlowResponse {
+  const ready = availability === "ready";
+  const provenance = {
+    source: "harness-lens-sdk",
+    method: "statistical" as const,
+    evidenceIds: ["observation-2"],
+    totalEvidence: 1,
+    location: {
+      uri: "file:///workspace/AGENTS.md",
+      range: {
+        start: { line: 1, character: 2 },
+        end: { line: 1, character: 4 },
+      },
+    },
+  };
+  const nodes = ready
+    ? [
+        { id: "n0", logicalId: "read", label: "Read", kind: "action" as const, layer: 0, provenance: [] },
+        { id: "n1", logicalId: "write", label: "Write", kind: "action" as const, layer: 1, provenance: [provenance] },
+        { id: "n2", logicalId: "read", label: "Read", kind: "action" as const, layer: 2, provenance: [] },
+      ]
+    : availability === "insufficient_evidence"
+      ? [{ id: "n0", logicalId: "read", label: "Read", kind: "action" as const, layer: 0, provenance: [] }]
+      : [];
+  const metric = (value: number, sampleSize: number) => ({
+    value,
+    unit: "transitions",
+    denominator: 4,
+    share: value / 4,
+    sampleSize,
+    window: { start: "a", end: "z" },
+  });
+  return {
+    schemaVersion: 1,
+    rootUri: "file:///workspace",
+    status: {
+      state: availability === "unavailable" ? "off" : "ready",
+      generation: ready ? 1 : 0,
+      ...(ready ? { lastSuccess: 1 } : {}),
+      hasSnapshot: availability !== "unavailable",
+      observations: ready ? 5 : availability === "insufficient_evidence" ? 1 : 2,
+      sessions: availability === "unavailable" ? 0 : 1,
+    },
+    graph: {
+      schemaVersion: 1,
+      kind: "observed_flow",
+      method: "statistical",
+      availability,
+      completeness: availability === "unavailable"
+        ? { complete: false, reasons: [{ code: "runtime_off" }] }
+        : { complete: true, reasons: [] },
+      limits: { maxNodes: 256, maxEdges: 512, maxHops: 32 },
+      filters: {
+        categories: [],
+        statuses: [],
+        metricUnit: "transitions",
+      },
+      nodes,
+      edges: ready
+        ? [
+            {
+              id: "e0",
+              source: "n0",
+              target: "n1",
+              relationship: "observed_transition",
+              method: "statistical",
+              metric: metric(3, 3),
+              provenance: [provenance],
+            },
+            {
+              id: "e1",
+              source: "n1",
+              target: "n2",
+              relationship: "observed_transition",
+              method: "statistical",
+              metric: metric(1, 1),
+              provenance: [],
+            },
+          ]
+        : [],
+    },
+  };
+}

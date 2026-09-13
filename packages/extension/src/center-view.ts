@@ -9,11 +9,21 @@ import {
   type HistorySnapshot,
   type RuntimeStatus,
 } from "./center-model.js";
+import {
+  type FlowProvenance,
+  type ObservedFlowEdge,
+  type ObservedFlowFilters,
+  type ObservedFlowNode,
+  type ObservedFlowResponse,
+} from "./observed-flow-service.js";
 
 export interface CenterViewState {
   report?: AnalysisReport;
   history: HistorySnapshot[];
   runtime?: RuntimeStatus;
+  flow?: ObservedFlowResponse;
+  flowFilters: ObservedFlowFilters;
+  flowError?: string;
   error?: string;
 }
 
@@ -55,10 +65,227 @@ function historyChart(history: readonly HistorySnapshot[]): string {
   </svg>`;
 }
 
+interface PositionedFlowNode {
+  node: ObservedFlowNode;
+  x: number;
+  y: number;
+  height: number;
+}
+
+function firstLocation(provenance: readonly FlowProvenance[]): FlowProvenance["location"] {
+  return provenance.find((value) => value.location)?.location;
+}
+
+function flowNavigationAttributes(provenance: readonly FlowProvenance[]): string {
+  const location = firstLocation(provenance);
+  return location
+    ? ` data-flow-uri="${escapeHtml(location.uri)}" data-flow-line="${location.range.start.line}" data-flow-character="${location.range.start.character}"`
+    : "";
+}
+
+function sankeyChart(flow: ObservedFlowResponse): string {
+  if (flow.graph.availability !== "ready" || flow.graph.edges.length === 0) {
+    return "";
+  }
+  const layers = new Map<number, ObservedFlowNode[]>();
+  for (const node of flow.graph.nodes) {
+    const layer = node.layer ?? 0;
+    const values = layers.get(layer) ?? [];
+    values.push(node);
+    layers.set(layer, values);
+  }
+  for (const values of layers.values()) {
+    values.sort((left, right) => left.label.localeCompare(right.label) || left.id.localeCompare(right.id));
+  }
+  const maximumLayer = Math.max(0, ...layers.keys());
+  const maximumLayerSize = Math.max(1, ...[...layers.values()].map((values) => values.length));
+  const width = Math.max(760, (maximumLayer + 1) * 190);
+  const height = Math.max(320, maximumLayerSize * 64 + 80);
+  const horizontalMargin = 50;
+  const verticalMargin = 38;
+  const nodeWidth = 16;
+  const nodePadding = 18;
+  const nodeWeights = new Map<string, number>();
+  for (const node of flow.graph.nodes) {
+    const incoming = flow.graph.edges
+      .filter((edge) => edge.target === node.id)
+      .reduce((sum, edge) => sum + edge.metric.value, 0);
+    const outgoing = flow.graph.edges
+      .filter((edge) => edge.source === node.id)
+      .reduce((sum, edge) => sum + edge.metric.value, 0);
+    nodeWeights.set(node.id, Math.max(incoming, outgoing));
+  }
+  const scaleCandidates = [...layers.values()].map((nodes) => {
+    const total = nodes.reduce((sum, node) => sum + (nodeWeights.get(node.id) ?? 0), 0);
+    const available = height - verticalMargin * 2 - Math.max(0, nodes.length - 1) * nodePadding;
+    return total > 0 ? available / total : Number.POSITIVE_INFINITY;
+  });
+  const maximumWeight = Math.max(1, ...nodeWeights.values());
+  const scale = Math.min(...scaleCandidates, 52 / maximumWeight);
+  const positioned = new Map<string, PositionedFlowNode>();
+  for (const [layer, nodes] of layers) {
+    const nodeHeights = nodes.map((node) => (nodeWeights.get(node.id) ?? 0) * scale);
+    const totalHeight = nodeHeights.reduce((sum, value) => sum + value, 0)
+      + Math.max(0, nodes.length - 1) * nodePadding;
+    let y = Math.max(verticalMargin, (height - totalHeight) / 2);
+    for (const [index, node] of nodes.entries()) {
+      const x = maximumLayer === 0
+        ? width / 2
+        : horizontalMargin
+          + layer * (width - horizontalMargin * 2 - nodeWidth) / maximumLayer;
+      const nodeHeight = nodeHeights[index] ?? 0;
+      positioned.set(node.id, { node, x, y, height: nodeHeight });
+      y += nodeHeight + nodePadding;
+    }
+  }
+
+  const sourceOffsets = new Map<string, number>();
+  const targetOffsets = new Map<string, number>();
+  const edges = flow.graph.edges.map((edge) => {
+    const source = positioned.get(edge.source)!;
+    const target = positioned.get(edge.target)!;
+    const thickness = edge.metric.value * scale;
+    const sourceOffset = sourceOffsets.get(edge.source) ?? 0;
+    const targetOffset = targetOffsets.get(edge.target) ?? 0;
+    sourceOffsets.set(edge.source, sourceOffset + thickness);
+    targetOffsets.set(edge.target, targetOffset + thickness);
+    const sourceX = source.x + nodeWidth;
+    const targetX = target.x;
+    const sourceY = source.y + sourceOffset + thickness / 2;
+    const targetY = target.y + targetOffset + thickness / 2;
+    const bend = (targetX - sourceX) / 2;
+    const label = `${source.node.label} to ${target.node.label}: ${edge.metric.value} ${edge.metric.unit} out of denominator ${edge.metric.denominator}; ${(edge.metric.share * 100).toFixed(1)} percent; ${edge.metric.sampleSize} samples; window ${edge.metric.window.start} through ${edge.metric.window.end}`;
+    const location = firstLocation(edge.provenance);
+    return `<path class="flow-edge${location ? " navigable" : ""}" d="M ${sourceX} ${sourceY} C ${sourceX + bend} ${sourceY}, ${targetX - bend} ${targetY}, ${targetX} ${targetY}" stroke-width="${thickness}" tabindex="0" role="${location ? "link" : "graphics-symbol"}" aria-label="${escapeHtml(label)}"${flowNavigationAttributes(edge.provenance)}><title>${escapeHtml(label)}</title></path>`;
+  }).join("");
+  const nodes = [...positioned.values()].map(({ node, x, y, height: nodeHeight }) => {
+    const label = `${node.label}; canonical identity ${node.logicalId}; layer ${node.layer ?? 0}`;
+    return `<g class="flow-node" tabindex="0" role="graphics-symbol" aria-label="${escapeHtml(label)}">
+      <rect x="${x}" y="${y}" width="${nodeWidth}" height="${nodeHeight}"><title>${escapeHtml(label)}</title></rect>
+      <text x="${x + nodeWidth + 6}" y="${y + Math.max(12, nodeHeight / 2)}">${escapeHtml(node.label)} · L${node.layer ?? 0}</text>
+    </g>`;
+  }).join("");
+  const denominator = flow.graph.edges[0]!.metric.denominator;
+  const unit = flow.graph.filters.metricUnit;
+  return `<div class="flow-chart-scroll"><svg class="flow-chart" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-labelledby="flow-chart-title flow-chart-description">
+    <title id="flow-chart-title">Observed ordered harness flow</title>
+    <desc id="flow-chart-description">Link thickness is proportional to ${escapeHtml(unit)}. Filtered denominator ${denominator}. Cycles repeat canonical actions at later layers.</desc>
+    <g class="flow-edges">${edges}</g><g class="flow-nodes">${nodes}</g>
+  </svg></div>`;
+}
+
+function selected(value: string, expected: string): string {
+  return value === expected ? " selected" : "";
+}
+
+function checked(values: readonly string[], expected: string): string {
+  return values.includes(expected) ? " checked" : "";
+}
+
+function flowStateMessage(flow: ObservedFlowResponse): string {
+  switch (flow.graph.availability) {
+    case "unavailable":
+      return "Observed flow is unavailable. This is missing evidence, not zero activity.";
+    case "insufficient_evidence":
+      return "Evidence exists, but it cannot establish an ordered transition.";
+    case "empty":
+      return "Complete evidence contains no transitions matching the active filters.";
+    case "ready":
+      return `${flow.graph.edges.length} measured transition(s) across ${flow.graph.nodes.length} layered node(s).`;
+  }
+}
+
+function observedFlowSection(
+  flow: ObservedFlowResponse | undefined,
+  filters: ObservedFlowFilters,
+  error: string | undefined,
+): string {
+  const rootOptions = flow
+    ? [...new Map(flow.graph.nodes.map((node) => [node.logicalId, node.label])).entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([id, label]) => `<option value="${escapeHtml(id)}">${escapeHtml(label)}</option>`)
+      .join("")
+    : "";
+  const filterForm = `<form id="flow-filters">
+    <fieldset><legend>Observed-flow projection</legend><div class="flow-filter-grid">
+      <label>Root action<input name="root" list="flow-roots" value="${escapeHtml(filters.root ?? "")}" placeholder="All actions"></label><datalist id="flow-roots">${rootOptions}</datalist>
+      <label>Maximum hops<input name="maxHops" type="number" min="1" max="100" value="${filters.maxHops}"></label>
+      <label>Window start<input name="windowStart" value="${escapeHtml(filters.windowStart ?? "")}" placeholder="ISO timestamp"></label>
+      <label>Window end<input name="windowEnd" value="${escapeHtml(filters.windowEnd ?? "")}" placeholder="ISO timestamp"></label>
+      <label>Categories<input name="categories" value="${escapeHtml(filters.categories.join(", "))}" placeholder="tool, model"></label>
+      <label>Minimum share<input name="minimumShare" type="number" min="0" max="1" step="0.001" value="${filters.minimumShare ?? ""}" placeholder="0.01"></label>
+      <label>Width metric<select name="metric"><option value="transitions"${selected(filters.metric, "transitions")}>Transitions</option><option value="distinct_sessions"${selected(filters.metric, "distinct_sessions")}>Distinct sessions</option><option value="duration_micros"${selected(filters.metric, "duration_micros")}>Duration</option><option value="cost"${selected(filters.metric, "cost")}>Observed cost</option></select></label>
+      <label>Cost unit<input name="costUnit" value="${escapeHtml(filters.costUnit ?? "")}" placeholder="USD"></label>
+    </div><div class="flow-statuses" role="group" aria-label="Destination statuses">
+      <span>Destination status</span>
+      <label><input type="checkbox" name="status" value="success"${checked(filters.statuses, "success")}> Success</label>
+      <label><input type="checkbox" name="status" value="error"${checked(filters.statuses, "error")}> Error</label>
+      <label><input type="checkbox" name="status" value="timeout"${checked(filters.statuses, "timeout")}> Timeout</label>
+      <label><input type="checkbox" name="status" value="cancelled"${checked(filters.statuses, "cancelled")}> Cancelled</label>
+    </div><div class="runtime-actions"><button type="submit">Apply flow filters</button><button type="button" id="refresh-flow">Refresh trace snapshot</button><button type="button" id="flow-settings">Configure trace source</button></div></fieldset>
+  </form>`;
+  if (!flow) {
+    return `<section id="flow"><h2>Observed flow</h2><p>Only measured, ordered action transitions appear here. Static relationships remain in the workspace tree.</p>${filterForm}<div class="empty" role="status"><strong>Observed flow unavailable</strong><p>${escapeHtml(error ?? "Use a compatible language server and configure an explicit sanitized trace source.")}</p><p>Unavailable evidence never means zero activity.</p></div></section>`;
+  }
+  const nodeById = new Map(flow.graph.nodes.map((node) => [node.id, node]));
+  const completeness = flow.graph.completeness.complete
+    ? "Complete"
+    : `Partial: ${flow.graph.completeness.reasons.map((reason) => `${reason.code}${reason.count === undefined ? "" : ` (${reason.count})`}`).join(", ")}`;
+  const activeFilters = [
+    flow.graph.filters.root ? `root ${flow.graph.filters.root}` : "all roots",
+    `max ${flow.graph.limits.maxHops} hops`,
+    flow.graph.filters.window
+      ? `window ${flow.graph.filters.window.start} through ${flow.graph.filters.window.end}`
+      : "full trace window",
+    flow.graph.filters.categories.length
+      ? `categories ${flow.graph.filters.categories.join(", ")}`
+      : "all categories",
+    flow.graph.filters.statuses.length
+      ? `statuses ${flow.graph.filters.statuses.join(", ")}`
+      : "all statuses",
+    flow.graph.filters.minimumShare === undefined
+      ? "no minimum share"
+      : `minimum share ${flow.graph.filters.minimumShare}`,
+  ].join(" · ");
+  const rows = flow.graph.edges.map((edge) => {
+    const source = nodeById.get(edge.source)!;
+    const target = nodeById.get(edge.target)!;
+    const provenance = edge.provenance
+      .map((value) => `${value.source}: ${value.totalEvidence} evidence reference(s)`)
+      .join("; ");
+    const location = firstLocation(edge.provenance);
+    return `<tr>
+      <td>${escapeHtml(source.label)} <small>${escapeHtml(source.logicalId)} · layer ${source.layer ?? "—"}</small></td>
+      <td>${escapeHtml(target.label)} <small>${escapeHtml(target.logicalId)} · layer ${target.layer ?? "—"}</small></td>
+      <td>${amount(edge.metric.value, 6)} ${escapeHtml(edge.metric.unit)}</td>
+      <td>${amount(edge.metric.denominator, 6)} ${escapeHtml(edge.metric.unit)}</td>
+      <td>${percentage(edge.metric.share)}</td>
+      <td>${edge.metric.sampleSize}</td>
+      <td>${escapeHtml(edge.metric.window.start)}<small>through ${escapeHtml(edge.metric.window.end)}</small></td>
+      <td>${escapeHtml(provenance)}${location ? `<button class="link flow-open"${flowNavigationAttributes(edge.provenance)}>Open evidence</button>` : ""}</td>
+    </tr>`;
+  }).join("");
+  const stale = flow.status.state === "failed" && flow.status.hasSnapshot
+    ? " Previous validated snapshot retained; graph is stale."
+    : "";
+  return `<section id="flow">
+    <div class="section-title"><div><h2>Observed flow</h2><p>Measured adjacent transitions only. Static relationships and possible paths are never shown as observed flow.</p></div><span class="flow-state">${escapeHtml(flow.status.state)} / ${escapeHtml(flow.graph.availability)}</span></div>
+    ${filterForm}
+    ${error ? `<div role="alert"><strong>Flow refresh failed. Previous validated projection retained.</strong><p>${escapeHtml(error)}</p></div>` : ""}
+    <div class="flow-summary" role="status" aria-live="polite"><strong>${escapeHtml(flowStateMessage(flow))}</strong><p>${escapeHtml(completeness)}.${escapeHtml(stale)}</p><p>Metric: ${escapeHtml(flow.graph.filters.metricUnit)} · ${flow.status.observations} observations · ${flow.status.sessions} sessions · generation ${flow.status.generation}${flow.status.issue ? ` · issue ${escapeHtml(flow.status.issue)}` : ""}</p><p>Active filters: ${escapeHtml(activeFilters)}</p></div>
+    ${sankeyChart(flow)}
+    ${rows ? `<div class="scroll"><table class="flow-table"><caption>Keyboard-accessible observed transition data. Link thickness above is proportional to the same named value and denominator.</caption><thead><tr><th>Source</th><th>Target</th><th>Measured value</th><th>Filtered denominator</th><th>Share</th><th>Sample</th><th>Window</th><th>Provenance</th></tr></thead><tbody>${rows}</tbody></table></div>` : ""}
+    <p class="method">Method: statistical aggregation of originally adjacent sanitized observations. Layered copies preserve canonical logical identity when cycles recur.</p>
+  </section>`;
+}
+
 function reportBody(
   report: AnalysisReport,
   history: readonly HistorySnapshot[],
   runtime: RuntimeStatus | undefined,
+  flow: ObservedFlowResponse | undefined,
+  flowFilters: ObservedFlowFilters,
+  flowError: string | undefined,
 ): string {
   const assets = assetSummaries(report);
   const warnings = report.findings.filter((finding) => finding.severity === "warning").length;
@@ -176,8 +403,10 @@ function reportBody(
   <section id="runtime">
     <h2>Runtime history</h2>
     <div class="runtime-actions"><button id="runtime-settings">Configure runtime evidence</button><button id="refresh-runtime">Refresh runtime evidence</button></div>
-    <div class="empty"><strong>${escapeHtml(runtimeTitle)}</strong><p>${escapeHtml(runtimeDetail)}</p><p>Tool errors, retries, timeouts, per-call cost, and attributed effectiveness remain unavailable until a bounded sanitized trace contract exists. Aggregate CodeBurn evidence never alters deterministic findings or scores.</p></div>
+    <div class="empty"><strong>${escapeHtml(runtimeTitle)}</strong><p>${escapeHtml(runtimeDetail)}</p><p>Aggregate CodeBurn evidence never alters deterministic findings or scores. Sanitized ordered action evidence is shown separately as observed flow.</p></div>
   </section>
+
+  ${observedFlowSection(flow, flowFilters, flowError)}
 
   <section id="plugins">
     <h2>Plugin execution</h2>
@@ -196,7 +425,14 @@ export function centerHtml(state: CenterViewState, nonce: string): string {
     ? `<section role="alert"><strong>Refresh failed. Previous report retained.</strong><p>${escapeHtml(state.error)}</p></section>`
     : "";
   const body = state.report
-    ? reportBody(state.report, state.history, state.runtime)
+    ? reportBody(
+        state.report,
+        state.history,
+        state.runtime,
+        state.flow,
+        state.flowFilters,
+        state.flowError,
+      )
     : `<section class="empty"><strong>No report loaded</strong><p>${escapeHtml(state.error ?? "Start the Harness Lens language server, then refresh.")}</p></section>`;
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -212,9 +448,26 @@ export function centerHtml(state: CenterViewState, nonce: string): string {
   nav a:hover { text-decoration: underline; }
   section { scroll-margin-top: 90px; }
   .filter { display: flex; align-items: center; gap: 10px; margin: 12px 0; }
-  input { color: var(--vscode-input-foreground); background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, var(--vscode-panel-border)); padding: 7px; min-width: 180px; }
+  input, select { color: var(--vscode-input-foreground); background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, var(--vscode-panel-border)); padding: 7px; min-width: 180px; }
   :focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 2px; }
   .runtime-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+  fieldset { border: 1px solid var(--vscode-panel-border); margin: 14px 0; padding: 12px; }
+  .flow-filter-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+  .flow-filter-grid label { display: grid; gap: 4px; }
+  .flow-statuses { align-items: center; display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+  .flow-statuses label { align-items: center; display: flex; gap: 4px; }
+  .flow-statuses input { min-width: 0; }
+  .flow-state { border: 1px solid currentColor; font-weight: 600; padding: 3px 8px; text-transform: uppercase; }
+  .flow-summary { border-left: 4px solid var(--vscode-focusBorder); margin: 14px 0; padding: 10px 12px; }
+  .flow-summary p { margin: 4px 0; }
+  .flow-chart-scroll { border: 1px solid var(--vscode-panel-border); overflow-x: auto; }
+  .flow-chart { background: var(--vscode-editor-background); display: block; }
+  .flow-edge { fill: none; opacity: .55; stroke: var(--vscode-charts-blue); }
+  .flow-edge.navigable { cursor: pointer; }
+  .flow-edge:focus, .flow-edge:hover { opacity: 1; stroke: var(--vscode-focusBorder); }
+  .flow-node rect { fill: var(--vscode-charts-blue); stroke: var(--vscode-foreground); stroke-width: 1; }
+  .flow-node text { fill: var(--vscode-foreground); font-size: 11px; }
+  .flow-table caption { color: var(--vscode-descriptionForeground); padding: 8px; text-align: left; }
   section, article { border: 1px solid var(--vscode-panel-border); background: var(--vscode-sideBar-background); }
   section { padding: 16px; } section > p, .section-title p { color: var(--vscode-descriptionForeground); margin: 5px 0 14px; }
   .summary { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
@@ -229,16 +482,40 @@ export function centerHtml(state: CenterViewState, nonce: string): string {
   .improving, .pass { color: var(--vscode-testing-iconPassed); } .degrading, .error { color: var(--vscode-testing-iconFailed); } .warning { color: var(--vscode-editorWarning-foreground); } .stable, .info { color: var(--vscode-editorInfo-foreground); } .insufficient_evidence, .unknown { color: var(--vscode-descriptionForeground); }
   .trend { height: 120px; width: 100%; } .trend line { stroke: currentColor; opacity: .2; } .trend polyline { fill: none; stroke: var(--vscode-charts-blue); stroke-width: 2; }
   .method, .empty { color: var(--vscode-descriptionForeground); } .empty { padding: 22px; text-align: center; }
+  @media (forced-colors: active) { .flow-edge { opacity: 1; stroke: LinkText; } .flow-node rect { fill: Canvas; stroke: CanvasText; stroke-width: 2; } .flow-state, .flow-summary { border-color: CanvasText; } }
   @media (max-width: 700px) { header { padding: 14px; } main { padding: 14px; } .summary { grid-template-columns: 1fr 1fr; } }
 </style></head><body>
 <header><div><h1>Harness Lens</h1><small>Evidence-backed workspace observability</small></div><button id="refresh">Refresh report</button></header>
-${state.report ? '<nav aria-label="Metrics sections"><a href="#overview">Overview</a><a href="#files">Files and skills</a><a href="#findings">Findings</a><a href="#scores">Scores</a><a href="#runtime">Runtime</a><a href="#plugins">Plugins</a><a href="#history">History</a></nav>' : ""}
+${state.report ? '<nav aria-label="Metrics sections"><a href="#overview">Overview</a><a href="#files">Files and skills</a><a href="#findings">Findings</a><a href="#scores">Scores</a><a href="#runtime">Runtime</a><a href="#flow">Observed flow</a><a href="#plugins">Plugins</a><a href="#history">History</a></nav>' : ""}
 <main>${staleWarning}${body}</main>
 <script nonce="${nonce}">
   const vscode = acquireVsCodeApi();
   document.getElementById('refresh').addEventListener('click', () => vscode.postMessage({ type: 'refresh' }));
   document.getElementById('runtime-settings')?.addEventListener('click', () => vscode.postMessage({ type: 'runtime-settings' }));
   document.getElementById('refresh-runtime')?.addEventListener('click', () => vscode.postMessage({ type: 'refresh-runtime' }));
+  document.getElementById('flow-settings')?.addEventListener('click', () => vscode.postMessage({ type: 'flow-settings' }));
+  document.getElementById('refresh-flow')?.addEventListener('click', () => vscode.postMessage({ type: 'refresh-flow' }));
+  document.getElementById('flow-filters')?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const data = new FormData(event.target);
+    const value = name => String(data.get(name) || '').trim();
+    const categories = value('categories').split(',').map(entry => entry.trim()).filter(Boolean);
+    const minimumShare = value('minimumShare');
+    vscode.postMessage({
+      type: 'flow-filters',
+      filters: {
+        root: value('root'),
+        maxHops: Number(value('maxHops')),
+        windowStart: value('windowStart'),
+        windowEnd: value('windowEnd'),
+        categories,
+        statuses: data.getAll('status').map(String),
+        minimumShare: minimumShare === '' ? undefined : Number(minimumShare),
+        metric: value('metric'),
+        costUnit: value('costUnit'),
+      },
+    });
+  });
   document.getElementById('file-filter')?.addEventListener('input', (event) => {
     const query = event.target.value.trim().toLowerCase();
     const rows = [...document.querySelectorAll('#files tbody tr[data-asset]')];
@@ -250,5 +527,12 @@ ${state.report ? '<nav aria-label="Metrics sections"><a href="#overview">Overvie
     document.getElementById('file-filter-status').textContent = visible + ' of ' + rows.length + ' rows shown';
   });
   document.querySelectorAll('[data-open]').forEach((element) => element.addEventListener('click', () => vscode.postMessage({ type: 'open', path: element.dataset.open, line: Number(element.dataset.line || 1) })));
+  const openFlow = element => vscode.postMessage({ type: 'flow-open', uri: element.dataset.flowUri, line: Number(element.dataset.flowLine), character: Number(element.dataset.flowCharacter) });
+  document.querySelectorAll('[data-flow-uri]').forEach((element) => {
+    element.addEventListener('click', () => openFlow(element));
+    element.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openFlow(element); }
+    });
+  });
 </script></body></html>`;
 }

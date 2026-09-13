@@ -16,11 +16,22 @@ import {
   type WorkspaceReports,
 } from "./center-model.js";
 import { centerHtml, type CenterViewState } from "./center-view.js";
+import {
+  defaultObservedFlowFilters,
+  normalizeObservedFlowFilters,
+  type LspLocation,
+  type ObservedFlowFilters,
+  type ObservedFlowResponse,
+} from "./observed-flow-service.js";
 import { resolveReportSourcePath } from "./source-path.js";
 
 const historyPrefix = "harnessLens.observability.history";
 
 export type ReportRequester = (folder: vscode.WorkspaceFolder) => Promise<WorkspaceReports>;
+export type FlowRequester = (
+  folder: vscode.WorkspaceFolder,
+  filters: ObservedFlowFilters,
+) => Promise<ObservedFlowResponse>;
 
 class ObservationItem extends vscode.TreeItem {
   readonly children: readonly ObservationItem[];
@@ -40,6 +51,7 @@ class ObservationTree implements vscode.TreeDataProvider<ObservationItem> {
   private report: AnalysisReport | undefined;
   private history: readonly HistorySnapshot[] = [];
   private runtime: RuntimeStatus | undefined;
+  private flow: ObservedFlowResponse | undefined;
 
   readonly onDidChangeTreeData = this.changed.event;
 
@@ -51,10 +63,12 @@ class ObservationTree implements vscode.TreeDataProvider<ObservationItem> {
     report: AnalysisReport | undefined,
     history: readonly HistorySnapshot[],
     runtime?: RuntimeStatus,
+    flow?: ObservedFlowResponse,
   ): void {
     this.report = report;
     this.history = history;
     this.runtime = runtime;
+    this.flow = flow;
     this.changed.fire(undefined);
   }
 
@@ -180,6 +194,37 @@ class ObservationTree implements vscode.TreeDataProvider<ObservationItem> {
           leaf("Runtime status unavailable from server", "circle-slash"),
           leaf("Tool-call history: not measured", "history"),
         ];
+    const flow = this.flow;
+    const flowItems = flow
+      ? [
+          leaf(
+            `Status: ${flow.status.state}${flow.status.issue ? ` · ${flow.status.issue}` : ""}`,
+            flow.graph.availability === "ready" ? "pass" : "warning",
+          ),
+          leaf(
+            `${flow.graph.edges.length} transitions · ${flow.status.sessions} sessions`,
+            "type-hierarchy-sub",
+          ),
+          ...flow.graph.edges.slice(0, 25).map((edge) => {
+            const source = flow.graph.nodes.find((node) => node.id === edge.source);
+            const target = flow.graph.nodes.find((node) => node.id === edge.target);
+            const item = leaf(
+              `${source?.label ?? edge.source} → ${target?.label ?? edge.target}`,
+              "arrow-right",
+            );
+            item.description = `${edge.metric.value} ${edge.metric.unit} · ${(edge.metric.share * 100).toFixed(1)}%`;
+            const location = edge.provenance.find((value) => value.location)?.location;
+            if (location) {
+              item.command = {
+                command: "harnessLens.openFlowLocation",
+                title: "Open Observed Transition Evidence",
+                arguments: [location],
+              };
+            }
+            return item;
+          }),
+        ]
+      : [leaf("Observed flow unavailable", "circle-slash")];
 
     return [
       group("Workspace assets", "files", [
@@ -190,6 +235,10 @@ class ObservationTree implements vscode.TreeDataProvider<ObservationItem> {
       group("Findings", "issues", findings),
       group("Context consumption", "symbol-numeric", context),
       group("Runtime history", "pulse", runtime),
+      group("Observed flow", "type-hierarchy-sub", [
+        leaf("Open accessible Sankey", "graph", "harnessLens.openCenter"),
+        ...flowItems,
+      ]),
     ];
   }
 }
@@ -219,12 +268,16 @@ export class ObservabilityCenter implements vscode.Disposable {
   private readonly tree = new ObservationTree();
   private readonly treeView: vscode.TreeView<ObservationItem>;
   private panel: vscode.WebviewPanel | undefined;
-  private state: CenterViewState = { history: [] };
+  private state: CenterViewState = {
+    history: [],
+    flowFilters: defaultObservedFlowFilters,
+  };
   private folder: vscode.WorkspaceFolder | undefined;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly requestReport: ReportRequester,
+    private readonly requestFlow: FlowRequester,
   ) {
     this.treeView = vscode.window.createTreeView("harnessLens.observability", {
       treeDataProvider: this.tree,
@@ -257,6 +310,35 @@ export class ObservabilityCenter implements vscode.Disposable {
           void vscode.commands.executeCommand("harnessLens.refreshRuntime").then(undefined, () => {
             void vscode.window.showWarningMessage("Runtime evidence is unavailable. Check runtime settings and language-server status.");
           });
+        } else if (message?.type === "flow-settings") {
+          void vscode.commands.executeCommand(
+            "workbench.action.openSettings",
+            "harnessLens.observedFlow",
+          );
+        } else if (message?.type === "refresh-flow") {
+          void vscode.commands.executeCommand("harnessLens.refreshObservedFlowView").then(
+            undefined,
+            () => {
+              void vscode.window.showWarningMessage(
+                "Observed-flow evidence is unavailable. Check trace settings and language-server status.",
+              );
+            },
+          );
+        } else if (message?.type === "flow-filters") {
+          void this.applyFlowFilters(message.filters);
+        } else if (
+          message?.type === "flow-open"
+          && typeof message.uri === "string"
+          && typeof message.line === "number"
+          && typeof message.character === "number"
+        ) {
+          void this.openFlowLocation({
+            uri: message.uri,
+            range: {
+              start: { line: message.line, character: message.character },
+              end: { line: message.line, character: message.character },
+            },
+          });
         } else if (message?.type === "open" && typeof message.path === "string") {
           void this.openSource({
             path: message.path,
@@ -276,7 +358,11 @@ export class ObservabilityCenter implements vscode.Disposable {
       ? vscode.workspace.getWorkspaceFolder(vscode.window.activeTextEditor.document.uri)
       : vscode.workspace.workspaceFolders?.[0];
     if (!folder || folder.uri.scheme !== "file") {
-      this.state = { history: [], error: "Open a filesystem workspace to analyze harness files." };
+      this.state = {
+        history: [],
+        flowFilters: this.state.flowFilters,
+        error: "Open a filesystem workspace to analyze harness files.",
+      };
       this.tree.update(undefined, []);
       this.render();
       return;
@@ -295,13 +381,33 @@ export class ObservabilityCenter implements vscode.Disposable {
         history = appendSnapshot(history, snapshot(report));
         await this.context.workspaceState.update(key, history);
       }
-      this.state = { report, history, runtime: response.runtime };
-      this.tree.update(report, history, response.runtime);
+      let flow: ObservedFlowResponse | undefined;
+      let flowError: string | undefined;
+      try {
+        flow = await this.requestFlow(folder, this.state.flowFilters);
+      } catch (error: unknown) {
+        flowError = error instanceof Error ? error.message : String(error);
+        flow = this.state.flow;
+      }
+      this.state = {
+        report,
+        history,
+        runtime: response.runtime,
+        flowFilters: this.state.flowFilters,
+        ...(flow === undefined ? {} : { flow }),
+        ...(flowError === undefined ? {} : { flowError }),
+      };
+      this.tree.update(report, history, response.runtime, flow);
       this.treeView.description = folder.name;
     } catch (error: unknown) {
       const detail = error instanceof Error ? error.message : String(error);
       this.state = { ...this.state, error: detail };
-      this.tree.update(this.state.report, this.state.history, this.state.runtime);
+      this.tree.update(
+        this.state.report,
+        this.state.history,
+        this.state.runtime,
+        this.state.flow,
+      );
       this.treeView.description = this.state.report ? "Previous report · refresh failed" : "Report unavailable";
       if (recordHistory) {
         void vscode.window.showWarningMessage(`Harness Lens report unavailable: ${detail}`);
@@ -328,6 +434,38 @@ export class ObservabilityCenter implements vscode.Disposable {
     const selection = new vscode.Selection(line, 0, line, 0);
     editor.selection = selection;
     editor.revealRange(selection, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+  }
+
+  async openFlowLocation(location: LspLocation): Promise<void> {
+    const uri = vscode.Uri.parse(location.uri, true);
+    if (uri.scheme !== "file" || !this.folder) {
+      return;
+    }
+    const folder = vscode.workspace.getWorkspaceFolder(uri);
+    if (!folder || folder.uri.toString() !== this.folder.uri.toString()) {
+      return;
+    }
+    const document = await vscode.workspace.openTextDocument(uri);
+    const editor = await vscode.window.showTextDocument(document);
+    const line = Math.max(0, Math.min(document.lineCount - 1, location.range.start.line));
+    const character = Math.max(
+      0,
+      Math.min(document.lineAt(line).text.length, location.range.start.character),
+    );
+    const selection = new vscode.Selection(line, character, line, character);
+    editor.selection = selection;
+    editor.revealRange(selection, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+  }
+
+  private async applyFlowFilters(value: unknown): Promise<void> {
+    try {
+      const flowFilters = normalizeObservedFlowFilters(value);
+      this.state = { ...this.state, flowFilters };
+      await this.refresh(false);
+    } catch (error: unknown) {
+      const detail = error instanceof Error ? error.message : String(error);
+      await vscode.window.showWarningMessage(`Observed-flow filters rejected: ${detail}`);
+    }
   }
 
   private render(): void {

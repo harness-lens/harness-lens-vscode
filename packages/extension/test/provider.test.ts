@@ -47,9 +47,12 @@ test("runtime mode cannot select CodeBurn without explicit provider consent", ()
     KEEP: "yes",
     HARNESS_METRICS_CODEBURN_EXECUTABLE: "stale",
     HARNESS_METRICS_SNAPSHOT_PATH: "stale",
+    HARNESS_LENS_TRACE_MODE: "snapshot",
+    HARNESS_LENS_TRACE_SNAPSHOT_PATH: "stale",
   }, settings), {
     KEEP: "yes",
     HARNESS_METRICS_MODE: "off",
+    HARNESS_LENS_TRACE_MODE: "off",
   });
 });
 
@@ -70,6 +73,7 @@ test("validated live and snapshot settings serialize only mode-relevant values",
   }).harnessLens.selectedProviders, ["codeburn"]);
   assert.deepEqual(runtimeEnvironment({}, live), {
     HARNESS_METRICS_MODE: "live",
+    HARNESS_LENS_TRACE_MODE: "off",
     HARNESS_METRICS_CODEBURN_EXECUTABLE: "/opt/codeburn",
     HARNESS_METRICS_CODEBURN_PERIOD: "30days",
   });
@@ -84,7 +88,28 @@ test("validated live and snapshot settings serialize only mode-relevant values",
   assert.deepEqual(runtimeEnvironment({}, snapshot), {
     HARNESS_METRICS_MODE: "snapshot",
     HARNESS_METRICS_SNAPSHOT_PATH: "/tmp/report.json",
+    HARNESS_LENS_TRACE_MODE: "off",
   });
+});
+
+test("provider-neutral trace snapshot configuration is independent of CodeBurn", () => {
+  const settings = resolveProviderSettings({
+    runtimeMode: "off",
+    codeBurnEnabled: false,
+    traceMode: "snapshot",
+    traceSnapshotPath: " /tmp/trace.json ",
+  });
+  assert.equal(settings.runtimeMode, "off");
+  assert.equal(settings.traceMode, "snapshot");
+  assert.deepEqual(runtimeEnvironment({}, settings), {
+    HARNESS_METRICS_MODE: "off",
+    HARNESS_LENS_TRACE_MODE: "snapshot",
+    HARNESS_LENS_TRACE_SNAPSHOT_PATH: "/tmp/trace.json",
+  });
+
+  const invalid = resolveProviderSettings({ traceMode: "snapshot", traceSnapshotPath: " " });
+  assert.equal(invalid.traceMode, "off");
+  assert.equal(invalid.issues[0]?.setting, "harnessLens.observedFlow.snapshotPath");
 });
 
 test("invalid active settings fail closed with actionable setting identities", () => {
@@ -131,6 +156,11 @@ test("process-wide provider settings use one window scope", () => {
   assert.equal(properties["harnessLens.providers.codeburn.enabled"]?.scope, "window");
   assert.equal(properties["harnessLens.runtime.mode"]?.scope, "window");
   assert.equal(properties["harnessLens.runtime.period"]?.scope, "window");
+  assert.equal(properties["harnessLens.observedFlow.mode"]?.scope, "window");
+  assert.equal(
+    properties["harnessLens.observedFlow.snapshotPath"]?.scope,
+    "machine-overridable",
+  );
   assert.equal(properties["harnessLens.report.maxFiles"]?.scope, "resource");
 });
 
