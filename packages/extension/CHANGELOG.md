@@ -5,6 +5,8 @@
 
 ## Unreleased
 
+## 0.0.4
+
 - Add a provider-neutral, accessible Sankey and equivalent table for measured
   adjacent action transitions, with bounded server-side filters and explicit
   evidence availability.

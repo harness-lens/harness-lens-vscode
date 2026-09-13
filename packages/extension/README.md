@@ -95,7 +95,7 @@ immutable merge
 Observed flow additionally requires `harnessLens/observedFlow` and
 `harnessLens.refreshObservedFlow` support, implemented by immutable
 language-server revision
-[`120dfab`](https://github.com/harness-lens/language-server/commit/120dfab150f1073323421be7622156c2c41dfbb0).
+[`82ce7e5`](https://github.com/harness-lens/language-server/commit/82ce7e5008793defd277264218e731c32160342b).
 Language server stays external rather than becoming bundled build dependency.
 Older servers continue to provide standard diagnostics but cannot populate dashboard.
 

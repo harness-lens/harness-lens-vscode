@@ -1,7 +1,7 @@
 {
   "name": "harness-lens",
   "displayName": "Harness Lens",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "publisher": "harness-lens",
   "description": "Discover and analyze coding-agent harness files with the Harness Lens language server.",
   "icon": "media/harness-lens-icon.png",
@@ -203,7 +203,7 @@
     "watch": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node20 --sourcemap --watch"
   },
   "dependencies": {
-    "@harness-lens/vscode": "0.0.3",
+    "@harness-lens/vscode": "0.0.4",
     "vscode-languageclient": "^10.1.1"
   },
   "repository": {
