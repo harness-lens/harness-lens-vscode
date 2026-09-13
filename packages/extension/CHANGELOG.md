@@ -10,6 +10,16 @@
 - Add a provider-neutral, accessible Sankey and equivalent table for measured
   adjacent action transitions, with bounded server-side filters and explicit
   evidence availability.
+- Add a right-side Sankey inspector for selected actions and transitions,
+  including bounded metrics, provenance, and side-by-side evidence navigation.
+- Show the bounded evidence filename beneath each navigable Sankey action.
+- Keep the Sankey, inspector, and flow controls aligned with responsive flex
+  layouts and a taller compact-panel graph viewport.
+- Add an accessible per-turn token lens below the Sankey with stacked input and
+  output bars, cached-input markers, explicit evidence gaps, attributed cost,
+  source navigation, and a synchronized turn slider.
+- Add client-side search and ten-row, bottom-centered pagination to local
+  report history.
 
 ## 0.0.3
 

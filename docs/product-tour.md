@@ -69,6 +69,12 @@ at later layers; labels preserve its logical identity. Root, hop, window,
 category, status, minimum-share, metric, and cost-unit controls request a new
 bounded projection from the language server.
 
+A responsive token lens below the Sankey stacks input and output counts per
+turn, marks cached input as a subset, and preserves missing measurements as
+gaps. Its slider synchronizes the selected turn with the corresponding layered
+action and shows measured/estimated status, attributed cost, and safe source
+navigation.
+
 Unavailable, insufficient, empty, partial, truncated, failed, and populated
 states use explicit text rather than color alone. The chart uses VS Code theme
 colors and forced-color rules, all renderer code stays in the extension, and a

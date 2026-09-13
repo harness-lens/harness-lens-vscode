@@ -5,9 +5,11 @@ export const observedFlowMethod = "harnessLens/observedFlow";
 
 const requestMaxNodes = 256;
 const requestMaxEdges = 512;
+const requestMaxTurns = 512;
 const maximumNodes = 5_000;
 const maximumEdges = 10_000;
 const maximumHops = 100;
+const maximumTurns = 10_000;
 const maximumFilterValues = 64;
 
 export type ObservedFlowMetricName =
@@ -59,7 +61,7 @@ export interface LspLocation {
 
 export interface FlowProvenance {
   source: string;
-  method: "statistical";
+  method: "deterministic" | "statistical";
   evidenceIds: readonly string[];
   totalEvidence: number;
   location?: LspLocation;
@@ -91,6 +93,47 @@ export interface ObservedFlowEdge {
   method: "statistical";
   metric: WeightedEdgeMetric;
   provenance: readonly FlowProvenance[];
+}
+
+export interface ObservedTokenUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  cachedInputTokens?: number;
+  totalTokens: number;
+  estimated: boolean;
+}
+
+export interface ObservedTurnCost {
+  value: number;
+  unit: string;
+  estimated: boolean;
+}
+
+export interface ObservedFlowTurn {
+  id: string;
+  sessionId: string;
+  sequence: number;
+  layer: number;
+  observedAt?: string;
+  action: { id: string; label: string; category: string };
+  status: ObservationStatus;
+  tokenUsage?: ObservedTokenUsage;
+  cost?: ObservedTurnCost;
+  location?: LspLocation;
+}
+
+export interface ObservedTokenTimeline {
+  method: "statistical";
+  availability: GraphAvailability;
+  completeness: {
+    complete: boolean;
+    reasons: readonly { code: string; count?: number }[];
+  };
+  maxTurns: number;
+  totalTurns: number;
+  sampleSize: number;
+  unit: "tokens";
+  turns: readonly ObservedFlowTurn[];
 }
 
 export interface ObservedFlowResponse {
@@ -126,6 +169,7 @@ export interface ObservedFlowResponse {
     nodes: readonly ObservedFlowNode[];
     edges: readonly ObservedFlowEdge[];
   };
+  tokenTimeline: ObservedTokenTimeline;
 }
 
 export const defaultObservedFlowFilters: ObservedFlowFilters = Object.freeze({
@@ -151,6 +195,7 @@ export class ObservedFlowService {
       maxNodes: requestMaxNodes,
       maxEdges: requestMaxEdges,
       maxHops: normalized.maxHops,
+      maxTurns: requestMaxTurns,
       ...(normalized.windowStart === undefined ? {} : {
         windowStart: normalized.windowStart,
         windowEnd: normalized.windowEnd,
@@ -327,6 +372,7 @@ export function parseObservedFlow(value: unknown): ObservedFlowResponse {
   if (availability === "ready" && !status.hasSnapshot) {
     throw new Error("Ready observed-flow graph requires an available snapshot.");
   }
+  const tokenTimeline = parseTokenTimeline(response.tokenTimeline, nodes);
 
   return {
     schemaVersion,
@@ -343,6 +389,179 @@ export function parseObservedFlow(value: unknown): ObservedFlowResponse {
       nodes,
       edges,
     },
+    tokenTimeline,
+  };
+}
+
+function parseTokenTimeline(
+  value: unknown,
+  nodes: readonly ObservedFlowNode[],
+): ObservedTokenTimeline {
+  const timeline = record(value, "observed-flow token timeline");
+  if (timeline.method !== "statistical") {
+    throw new Error("Observed-flow token timeline must be statistical evidence.");
+  }
+  const availability = choice(
+    timeline.availability,
+    graphAvailabilities,
+    "token timeline availability",
+  );
+  const completenessValue = record(
+    timeline.completeness,
+    "observed-flow token timeline completeness",
+  );
+  const reasons = optionalList(
+    completenessValue.reasons,
+    "observed-flow token timeline reasons",
+  ).map((value) => {
+    const reason = record(value, "observed-flow token timeline reason");
+    const count = optionalPositiveInteger(
+      reason.count,
+      "observed-flow token timeline reason count",
+    );
+    return {
+      code: boundedText(reason.code, "observed-flow token timeline reason code", 128),
+      ...(count === undefined ? {} : { count }),
+    };
+  });
+  const complete = boolean(
+    completenessValue.complete,
+    "observed-flow token timeline complete",
+  );
+  if (complete !== (reasons.length === 0)) {
+    throw new Error("Observed-flow token timeline completeness and reasons disagree.");
+  }
+  const maxTurns = boundedInteger(
+    timeline.maxTurns,
+    "observed-flow token timeline maxTurns",
+    1,
+    maximumTurns,
+  );
+  const totalTurns = nonNegativeInteger(
+    timeline.totalTurns,
+    "observed-flow token timeline totalTurns",
+  );
+  const sampleSize = nonNegativeInteger(
+    timeline.sampleSize,
+    "observed-flow token timeline sampleSize",
+  );
+  if (timeline.unit !== "tokens") {
+    throw new Error("Observed-flow token timeline unit must be tokens.");
+  }
+  const turns = boundedList(
+    timeline.turns,
+    "observed-flow token timeline turns",
+    maxTurns,
+  ).map(parseTurn);
+  if (totalTurns < turns.length) {
+    throw new Error("Observed-flow token timeline totalTurns is smaller than returned turns.");
+  }
+  if (new Set(turns.map((turn) => turn.id)).size !== turns.length) {
+    throw new Error("Observed-flow token timeline contains duplicate turn identities.");
+  }
+  const observedSamples = turns.filter((turn) => turn.tokenUsage !== undefined).length;
+  if (sampleSize !== observedSamples) {
+    throw new Error("Observed-flow token timeline sampleSize does not match token evidence.");
+  }
+  if ((availability === "ready") !== (sampleSize > 0)) {
+    throw new Error("Observed-flow token timeline availability and sampleSize disagree.");
+  }
+  const visibleNodes = new Set(nodes.map((node) => `${node.layer ?? 0}\u0000${node.logicalId}`));
+  if (turns.some((turn) => !visibleNodes.has(`${turn.layer}\u0000${turn.action.id}`))) {
+    throw new Error("Observed-flow token timeline turn is not represented by the graph.");
+  }
+  return {
+    method: "statistical",
+    availability,
+    completeness: { complete, reasons },
+    maxTurns,
+    totalTurns,
+    sampleSize,
+    unit: "tokens",
+    turns,
+  };
+}
+
+function parseTurn(value: unknown): ObservedFlowTurn {
+  const turn = record(value, "observed-flow token turn");
+  const action = record(turn.action, "observed-flow token turn action");
+  const observedAt = optionalBoundedText(
+    turn.observedAt,
+    "observed-flow token turn observedAt",
+    512,
+  );
+  const tokenUsage = turn.tokenUsage === undefined || turn.tokenUsage === null
+    ? undefined
+    : parseTokenUsage(turn.tokenUsage);
+  const cost = turn.cost === undefined || turn.cost === null
+    ? undefined
+    : parseTurnCost(turn.cost);
+  const location = turn.location === undefined || turn.location === null
+    ? undefined
+    : parseLocation(turn.location);
+  return {
+    id: boundedText(turn.id, "observed-flow token turn id", 512),
+    sessionId: boundedText(turn.sessionId, "observed-flow token turn sessionId", 512),
+    sequence: nonNegativeInteger(turn.sequence, "observed-flow token turn sequence"),
+    layer: nonNegativeInteger(turn.layer, "observed-flow token turn layer"),
+    ...(observedAt === undefined ? {} : { observedAt }),
+    action: {
+      id: boundedText(action.id, "observed-flow token turn action id", 512),
+      label: boundedText(action.label, "observed-flow token turn action label", 512),
+      category: boundedText(action.category, "observed-flow token turn category", 128),
+    },
+    status: choice(turn.status, observationStatuses, "observed-flow token turn status"),
+    ...(tokenUsage === undefined ? {} : { tokenUsage }),
+    ...(cost === undefined ? {} : { cost }),
+    ...(location === undefined ? {} : { location }),
+  };
+}
+
+function parseTokenUsage(value: unknown): ObservedTokenUsage {
+  const usage = record(value, "observed-flow token usage");
+  const inputTokens = optionalNonNegativeInteger(
+    usage.inputTokens,
+    "observed-flow inputTokens",
+  );
+  const outputTokens = optionalNonNegativeInteger(
+    usage.outputTokens,
+    "observed-flow outputTokens",
+  );
+  const cachedInputTokens = optionalNonNegativeInteger(
+    usage.cachedInputTokens,
+    "observed-flow cachedInputTokens",
+  );
+  const totalTokens = nonNegativeInteger(usage.totalTokens, "observed-flow totalTokens");
+  if (inputTokens !== undefined && inputTokens > totalTokens) {
+    throw new Error("Observed-flow inputTokens cannot exceed totalTokens.");
+  }
+  if (outputTokens !== undefined && outputTokens > totalTokens) {
+    throw new Error("Observed-flow outputTokens cannot exceed totalTokens.");
+  }
+  if (cachedInputTokens !== undefined
+      && (inputTokens === undefined || cachedInputTokens > inputTokens)) {
+    throw new Error("Observed-flow cachedInputTokens must be a subset of inputTokens.");
+  }
+  if (inputTokens !== undefined
+      && outputTokens !== undefined
+      && inputTokens + outputTokens !== totalTokens) {
+    throw new Error("Observed-flow token components must agree with totalTokens.");
+  }
+  return {
+    ...(inputTokens === undefined ? {} : { inputTokens }),
+    ...(outputTokens === undefined ? {} : { outputTokens }),
+    ...(cachedInputTokens === undefined ? {} : { cachedInputTokens }),
+    totalTokens,
+    estimated: boolean(usage.estimated, "observed-flow token usage estimated"),
+  };
+}
+
+function parseTurnCost(value: unknown): ObservedTurnCost {
+  const cost = record(value, "observed-flow token turn cost");
+  return {
+    value: nonNegativeFinite(cost.value, "observed-flow token turn cost value"),
+    unit: boundedText(cost.unit, "observed-flow token turn cost unit", 64),
+    estimated: boolean(cost.estimated, "observed-flow token turn cost estimated"),
   };
 }
 
@@ -359,7 +578,7 @@ function parseNode(value: unknown): ObservedFlowNode {
     kind: "action",
     ...(layer === undefined ? {} : { layer }),
     provenance: boundedList(node.provenance, "observed-flow node provenance", 32)
-      .map(parseProvenance),
+      .map((value) => parseProvenance(value, "deterministic", "node")),
   };
 }
 
@@ -390,14 +609,18 @@ function parseEdge(value: unknown): ObservedFlowEdge {
       window: parseWindow(metric.window, "observed-flow metric window"),
     },
     provenance: boundedList(edge.provenance, "observed-flow edge provenance", 32)
-      .map(parseProvenance),
+      .map((value) => parseProvenance(value, "statistical", "edge")),
   };
 }
 
-function parseProvenance(value: unknown): FlowProvenance {
+function parseProvenance(
+  value: unknown,
+  method: FlowProvenance["method"],
+  owner: "node" | "edge",
+): FlowProvenance {
   const provenance = record(value, "observed-flow provenance");
-  if (provenance.method !== "statistical") {
-    throw new Error("Observed-flow provenance method must be statistical.");
+  if (provenance.method !== method) {
+    throw new Error(`Observed-flow ${owner} provenance method must be ${method}.`);
   }
   const evidenceIds = uniqueBoundedTexts(
     provenance.evidence_ids,
@@ -416,7 +639,7 @@ function parseProvenance(value: unknown): FlowProvenance {
     : parseLocation(provenance.location);
   return {
     source: boundedText(provenance.source, "observed-flow provenance source", 512),
-    method: "statistical",
+    method,
     evidenceIds,
     totalEvidence,
     ...(location === undefined ? {} : { location }),

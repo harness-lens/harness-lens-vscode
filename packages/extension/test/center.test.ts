@@ -319,19 +319,77 @@ test("renders populated cyclic Sankey with proportional widths and accessible ta
     },
   }, "nonce");
   assert.match(html, /class="flow-chart"/);
+  assert.match(html, /class="flow-chart" viewBox="0 0 760 420"/);
+  assert.match(html, /id="flow-inspector"/);
+  assert.match(html, /Select a flow item/);
+  assert.match(html, /data-flow-selection="edge-0"/);
+  assert.match(html, /data-flow-selection="node-0"/);
+  assert.match(html, /data-flow-selection="edge-0"[^>]+data-flow-uri="file:\/\/\/workspace\/AGENTS\.md"/);
+  assert.match(html, /data-flow-selection="node-1"[^>]+data-flow-uri="file:\/\/\/workspace\/AGENTS\.md"/);
+  assert.match(html, /<tspan[^>]*>Write · L1<\/tspan>/);
+  assert.match(html, /<tspan class="flow-node-file"[^>]*>AGENTS\.md<\/tspan>/);
+  assert.match(html, /Evidence file<\/dt><dd>AGENTS\.md/);
+  assert.match(html, /aria-controls="flow-inspector-content"/);
+  assert.match(html, /Observed transition/);
+  assert.match(html, /Action node/);
   assert.match(html, /Keyboard-accessible observed transition data/);
   assert.match(html, /Filtered denominator/);
   assert.match(html, /3 transitions/);
   assert.match(html, /sample/i);
   assert.match(html, /Layered copies preserve canonical logical identity/);
   assert.match(html, /data-flow-uri="file:\/\/\/workspace\/AGENTS.md"/);
+  assert.match(html, /id="token-lens"[^>]*data-token-turns="3"/);
+  assert.match(html, /id="token-chart"/);
+  assert.match(html, /id="token-turn-slider"[^>]*max="2"/);
+  assert.match(html, /class="token-input"/);
+  assert.match(html, /class="token-output"/);
+  assert.match(html, /class="token-cached"/);
+  assert.match(html, /class="token-gap"/);
+  assert.match(html, /data-token-layer="1" data-token-action="write"/);
+  assert.match(html, /Total tokens<\/dt><dd>120 tokens/);
+  assert.match(html, /Explicitly estimated/);
+  assert.match(html, /Open turn evidence/);
+  assert.match(html, /Sample size 2; showing 3 of 3 matching turns/);
+  assert.match(html, /node\.classList\.toggle\('token-highlight'/);
+  assert.match(html, /tokenSlider\?\.addEventListener\('input'/);
   assert.match(html, /@media \(forced-colors: active\)/);
+  assert.match(html, /\.flow-chart-layout \{[^}]*display: flex;[^}]*flex-wrap: nowrap/);
+  assert.match(html, /@media \(max-width: 1000px\) \{ \.flow-chart-layout, \.token-lens-layout \{ flex-wrap: wrap; \}/);
+  assert.match(html, /\.flow-chart-scroll \{ min-height: 500px; \}/);
+  assert.match(html, /\.flow-chart-layout, \.token-lens-layout \{ flex-wrap: wrap; \}/);
+  assert.match(html, /\.token-slider-label \{ align-items: stretch; flex-direction: column; \}/);
+  assert.match(html, /@media \(prefers-reduced-motion: reduce\)/);
+  assert.ok(!html.includes(".flow-chart-layout { align-items: start; display: grid"));
   assert.match(html, /value="read"/);
   assert.match(html, /Active filters: root read/);
   const widths = [...html.matchAll(/class="flow-edge[^>]+stroke-width="([^"]+)"/g)]
     .map((match) => Number(match[1]));
   assert.equal(widths.length, 2);
   assert.ok(Math.abs(widths[0]! / widths[1]! - 3) < 1e-9);
+});
+
+test("renders searchable, paginated local history controls", () => {
+  const value = report();
+  const history = Array.from({ length: 12 }, (_, index) => ({
+    ...snapshot(value, `2026-09-${String(index + 1).padStart(2, "0")}T10:00:00Z`),
+    files: index + 1,
+  }));
+  const html = centerHtml({
+    report: value,
+    history,
+    flowFilters: defaultObservedFlowFilters,
+  }, "nonce");
+
+  assert.equal([...html.matchAll(/<tr data-history-row>/g)].length, 12);
+  assert.match(html, /id="history" data-history-page-size="10"/);
+  assert.match(html, /id="history-search" type="search"/);
+  assert.match(html, /id="history-previous"/);
+  assert.match(html, /id="history-page-status"/);
+  assert.match(html, /id="history-next"/);
+  assert.match(html, /\.history-pagination \{[^}]*justify-content: center/);
+  assert.match(html, /Math\.ceil\(matching\.length \/ historyPageSize\)/);
+  assert.ok(html.indexOf('id="history-search"') < html.indexOf("data-history-row"));
+  assert.ok(html.lastIndexOf("<tr data-history-row>") < html.indexOf('id="history-next"'));
 });
 
 test("renders unavailable, insufficient, empty, partial, truncated, and filtered states", () => {
@@ -413,6 +471,62 @@ function flowResponse(availability: GraphAvailability): ObservedFlowResponse {
     sampleSize,
     window: { start: "a", end: "z" },
   });
+  const turns = ready
+    ? [
+        {
+          id: "one",
+          sessionId: "session-a",
+          sequence: 1,
+          layer: 0,
+          observedAt: "a",
+          action: { id: "read", label: "Read", category: "tool" },
+          status: "success" as const,
+          tokenUsage: {
+            inputTokens: 60,
+            outputTokens: 20,
+            cachedInputTokens: 10,
+            totalTokens: 80,
+            estimated: false,
+          },
+          cost: { value: 0.001, unit: "USD", estimated: false },
+        },
+        {
+          id: "two",
+          sessionId: "session-a",
+          sequence: 2,
+          layer: 1,
+          observedAt: "b",
+          action: { id: "write", label: "Write", category: "tool" },
+          status: "success" as const,
+          tokenUsage: {
+            inputTokens: 90,
+            outputTokens: 30,
+            cachedInputTokens: 20,
+            totalTokens: 120,
+            estimated: true,
+          },
+          location: provenance.location,
+        },
+        {
+          id: "three",
+          sessionId: "session-a",
+          sequence: 3,
+          layer: 2,
+          observedAt: "c",
+          action: { id: "read", label: "Read", category: "tool" },
+          status: "success" as const,
+        },
+      ]
+    : availability === "insufficient_evidence"
+      ? [{
+          id: "one",
+          sessionId: "session-a",
+          sequence: 1,
+          layer: 0,
+          action: { id: "read", label: "Read", category: "tool" },
+          status: "success" as const,
+        }]
+      : [];
   return {
     schemaVersion: 1,
     rootUri: "file:///workspace",
@@ -461,6 +575,24 @@ function flowResponse(availability: GraphAvailability): ObservedFlowResponse {
             },
           ]
         : [],
+    },
+    tokenTimeline: {
+      method: "statistical",
+      availability: ready
+        ? "ready"
+        : availability === "empty"
+          ? "empty"
+          : "unavailable",
+      completeness: ready
+        ? { complete: false, reasons: [{ code: "missing_token_usage", count: 1 }] }
+        : availability === "empty"
+          ? { complete: true, reasons: [] }
+          : { complete: false, reasons: [{ code: availability === "unavailable" ? "runtime_off" : "missing_token_usage", count: availability === "unavailable" ? undefined : 1 }] },
+      maxTurns: 512,
+      totalTurns: turns.length,
+      sampleSize: ready ? 2 : 0,
+      unit: "tokens",
+      turns,
     },
   };
 }

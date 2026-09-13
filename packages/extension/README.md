@@ -77,8 +77,10 @@ Observed flow is separate from CodeBurn aggregate selection and defaults to
 `harnessLens.observedFlow.mode` to `snapshot` and
 `harnessLens.observedFlow.snapshotPath` to its JSON file. The extension passes
 only these explicit settings to the server, stores no trace, and renders only a
-validated bounded relationship graph. Use **Harness Lens: Refresh Observed
-Flow** after the snapshot changes.
+validated bounded relationship graph and aligned per-turn token timeline. The
+token lens distinguishes measured and explicitly estimated totals, keeps absent
+usage as a gap, and synchronizes its slider with layered Sankey actions. Use
+**Harness Lens: Refresh Observed Flow** after the snapshot changes.
 
 ## Language server
 
@@ -92,10 +94,12 @@ The metrics center requires a server supporting
 [PR #23](https://github.com/harness-lens/language-server/pull/23) and accepted in
 immutable merge
 [`496f288`](https://github.com/harness-lens/language-server/commit/496f28889b40522676c6d7a59a0b9b2d1af8e700).
-Observed flow additionally requires `harnessLens/observedFlow` and
-`harnessLens.refreshObservedFlow` support, implemented by immutable
-language-server revision
-[`82ce7e5`](https://github.com/harness-lens/language-server/commit/82ce7e5008793defd277264218e731c32160342b).
+Observed flow and the per-turn token timeline additionally require
+`harnessLens/observedFlow` and `harnessLens.refreshObservedFlow` support from
+language-server
+[PR #35](https://github.com/harness-lens/language-server/pull/35), pinned at
+immutable revision
+[`982beb4`](https://github.com/harness-lens/language-server/commit/982beb497896798e1fa72ec938330516a1db7d1b).
 Language server stays external rather than becoming bundled build dependency.
 Older servers continue to provide standard diagnostics but cannot populate dashboard.
 

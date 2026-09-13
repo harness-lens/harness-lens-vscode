@@ -20,6 +20,12 @@ test("parses a bounded populated layered observed-flow graph", () => {
   assert.equal(parsed.graph.edges[0]?.provenance[0]?.location?.range.start.character, 2);
   assert.equal(parsed.graph.nodes[2]?.logicalId, "read");
   assert.equal(parsed.graph.nodes[2]?.layer, 2);
+  assert.equal(parsed.tokenTimeline.sampleSize, 2);
+  assert.equal(parsed.tokenTimeline.totalTurns, 3);
+  assert.equal(parsed.tokenTimeline.turns[1]?.tokenUsage?.totalTokens, 120);
+  assert.equal(parsed.tokenTimeline.turns[1]?.tokenUsage?.estimated, true);
+  assert.equal(parsed.tokenTimeline.turns[1]?.location?.range.start.character, 2);
+  assert.equal(parsed.tokenTimeline.turns[2]?.tokenUsage, undefined);
 });
 
 test("rejects static inference, inconsistent width semantics, and unsafe navigation", () => {
@@ -40,6 +46,30 @@ test("rejects static inference, inconsistent width semantics, and unsafe navigat
     .provenance as Record<string, unknown>[];
   (provenance[0]!.location as Record<string, unknown>).uri = "https://example.invalid/source";
   assert.throws(() => parseObservedFlow(badLocation), /file scheme/);
+
+  const statisticalNode = populatedResponse();
+  const nodeProvenance = (statisticalNode.graph.nodes as Record<string, unknown>[])[0]!
+    .provenance as Record<string, unknown>[];
+  nodeProvenance[0]!.method = "statistical";
+  assert.throws(() => parseObservedFlow(statisticalNode), /node provenance method must be deterministic/);
+
+  const deterministicEdge = populatedResponse();
+  const edgeProvenance = (deterministicEdge.graph.edges as Record<string, unknown>[])[0]!
+    .provenance as Record<string, unknown>[];
+  edgeProvenance[0]!.method = "deterministic";
+  assert.throws(() => parseObservedFlow(deterministicEdge), /edge provenance method must be statistical/);
+
+  const badTokens = populatedResponse();
+  const tokenUsage = ((badTokens.tokenTimeline as Record<string, unknown>)
+    .turns as Record<string, unknown>[])[0]!.tokenUsage as Record<string, unknown>;
+  tokenUsage.totalTokens = 79;
+  assert.throws(() => parseObservedFlow(badTokens), /components must agree/);
+
+  const hiddenTurn = populatedResponse();
+  const turn = ((hiddenTurn.tokenTimeline as Record<string, unknown>)
+    .turns as Record<string, unknown>[])[0]!;
+  turn.layer = 99;
+  assert.throws(() => parseObservedFlow(hiddenTurn), /not represented by the graph/);
 });
 
 test("normalizes supported filters and rejects incomplete windows or cost units", () => {
@@ -88,6 +118,7 @@ test("service sends one fixed bounded provider-neutral request", async () => {
       maxNodes: 256,
       maxEdges: 512,
       maxHops: 32,
+      maxTurns: 512,
       categories: [],
       statuses: [],
       metric: "transitions",
@@ -121,13 +152,27 @@ function unavailableResponse(): Record<string, unknown> {
       nodes: [],
       edges: [],
     },
+    tokenTimeline: {
+      method: "statistical",
+      availability: "unavailable",
+      completeness: { complete: false, reasons: [{ code: "runtime_off" }] },
+      maxTurns: 512,
+      totalTurns: 0,
+      sampleSize: 0,
+      unit: "tokens",
+      turns: [],
+    },
   };
 }
 
 function populatedResponse(): Record<string, any> {
-  const provenance = (id: string, location = false): Record<string, unknown> => ({
+  const provenance = (
+    id: string,
+    method: "deterministic" | "statistical",
+    location = false,
+  ): Record<string, unknown> => ({
     source: "harness-lens-sdk",
-    method: "statistical",
+    method,
     evidence_ids: [id],
     total_evidence: 1,
     ...(location ? {
@@ -160,9 +205,9 @@ function populatedResponse(): Record<string, any> {
       limits: { max_nodes: 256, max_edges: 512, max_hops: 32 },
       filters: { metric_unit: "transitions" },
       nodes: [
-        { id: "n0", logical_id: "read", label: "Read", kind: "action", layer: 0, provenance: [provenance("one")] },
-        { id: "n1", logical_id: "write", label: "Write", kind: "action", layer: 1, provenance: [provenance("two", true)] },
-        { id: "n2", logical_id: "read", label: "Read", kind: "action", layer: 2, provenance: [provenance("three")] },
+        { id: "n0", logical_id: "read", label: "Read", kind: "action", layer: 0, provenance: [provenance("one", "deterministic")] },
+        { id: "n1", logical_id: "write", label: "Write", kind: "action", layer: 1, provenance: [provenance("two", "deterministic", true)] },
+        { id: "n2", logical_id: "read", label: "Read", kind: "action", layer: 2, provenance: [provenance("three", "deterministic")] },
       ],
       edges: [
         {
@@ -179,7 +224,7 @@ function populatedResponse(): Record<string, any> {
             sample_size: 3,
             window: { start: "a", end: "z" },
           },
-          provenance: [provenance("two", true)],
+          provenance: [provenance("two", "statistical", true)],
         },
         {
           id: "e1",
@@ -195,7 +240,64 @@ function populatedResponse(): Record<string, any> {
             sample_size: 1,
             window: { start: "a", end: "z" },
           },
-          provenance: [provenance("three")],
+          provenance: [provenance("three", "statistical")],
+        },
+      ],
+    },
+    tokenTimeline: {
+      method: "statistical",
+      availability: "ready",
+      completeness: {
+        complete: false,
+        reasons: [{ code: "missing_token_usage", count: 1 }],
+      },
+      maxTurns: 512,
+      totalTurns: 3,
+      sampleSize: 2,
+      unit: "tokens",
+      turns: [
+        {
+          id: "one",
+          sessionId: "s",
+          sequence: 1,
+          layer: 0,
+          observedAt: "a",
+          action: { id: "read", label: "Read", category: "tool" },
+          status: "success",
+          tokenUsage: {
+            inputTokens: 60,
+            outputTokens: 20,
+            cachedInputTokens: 10,
+            totalTokens: 80,
+            estimated: false,
+          },
+          cost: { value: 0.001, unit: "USD", estimated: false },
+        },
+        {
+          id: "two",
+          sessionId: "s",
+          sequence: 2,
+          layer: 1,
+          observedAt: "b",
+          action: { id: "write", label: "Write", category: "tool" },
+          status: "success",
+          tokenUsage: {
+            inputTokens: 90,
+            outputTokens: 30,
+            cachedInputTokens: 20,
+            totalTokens: 120,
+            estimated: true,
+          },
+          location: provenance("two", "statistical", true).location,
+        },
+        {
+          id: "three",
+          sessionId: "s",
+          sequence: 3,
+          layer: 2,
+          observedAt: "c",
+          action: { id: "read", label: "Read", category: "tool" },
+          status: "success",
         },
       ],
     },

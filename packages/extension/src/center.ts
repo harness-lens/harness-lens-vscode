@@ -446,7 +446,11 @@ export class ObservabilityCenter implements vscode.Disposable {
       return;
     }
     const document = await vscode.workspace.openTextDocument(uri);
-    const editor = await vscode.window.showTextDocument(document);
+    const editor = await vscode.window.showTextDocument(document, {
+      preserveFocus: true,
+      preview: true,
+      viewColumn: vscode.ViewColumn.Beside,
+    });
     const line = Math.max(0, Math.min(document.lineCount - 1, location.range.start.line));
     const character = Math.max(
       0,
