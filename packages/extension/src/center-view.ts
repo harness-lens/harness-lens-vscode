@@ -150,11 +150,11 @@ function sankeyChart(flow: ObservedFlowResponse): string {
   const maximumLayer = Math.max(0, ...layers.keys());
   const maximumLayerSize = Math.max(1, ...[...layers.values()].map((values) => values.length));
   const width = Math.max(760, (maximumLayer + 1) * 190);
-  const height = Math.max(320, maximumLayerSize * 64 + 80);
+  const height = Math.max(420, maximumLayerSize * 80 + 100);
   const horizontalMargin = 50;
   const verticalMargin = 38;
   const nodeWidth = 16;
-  const nodePadding = 18;
+  const nodePadding = 28;
   const nodeWeights = new Map<string, number>();
   for (const node of flow.graph.nodes) {
     const incoming = flow.graph.edges
@@ -539,17 +539,17 @@ export function centerHtml(state: CenterViewState, nonce: string): string {
   :focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 2px; }
   .runtime-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
   fieldset { border: 1px solid var(--vscode-panel-border); margin: 14px 0; padding: 12px; }
-  .flow-filter-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
-  .flow-filter-grid label { display: grid; gap: 4px; }
+  .flow-filter-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+  .flow-filter-grid label { display: flex; flex: 1 1 190px; flex-direction: column; gap: 4px; min-width: 0; }
   .flow-statuses { align-items: center; display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
   .flow-statuses label { align-items: center; display: flex; gap: 4px; }
   .flow-statuses input { min-width: 0; }
   .flow-state { border: 1px solid currentColor; font-weight: 600; padding: 3px 8px; text-transform: uppercase; }
   .flow-summary { border-left: 4px solid var(--vscode-focusBorder); margin: 14px 0; padding: 10px 12px; }
   .flow-summary p { margin: 4px 0; }
-  .flow-chart-layout { align-items: start; display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr) minmax(240px, 320px); }
-  .flow-chart-scroll { border: 1px solid var(--vscode-panel-border); overflow-x: auto; }
-  .flow-chart { background: var(--vscode-editor-background); display: block; }
+  .flow-chart-layout { align-items: stretch; display: flex; flex-wrap: nowrap; gap: 12px; min-width: 0; }
+  .flow-chart-scroll { align-items: center; border: 1px solid var(--vscode-panel-border); display: flex; flex: 1 1 620px; min-height: 420px; min-width: 0; overflow: auto; transition: flex-basis 180ms ease, min-height 180ms ease; }
+  .flow-chart { background: var(--vscode-editor-background); display: block; flex: 0 0 auto; }
   .flow-edge { fill: none; opacity: .55; stroke: var(--vscode-charts-blue); }
   .selectable { cursor: pointer; }
   .flow-edge:focus, .flow-edge:hover { opacity: 1; stroke: var(--vscode-focusBorder); }
@@ -559,14 +559,14 @@ export function centerHtml(state: CenterViewState, nonce: string): string {
   .flow-node-file { fill: var(--vscode-descriptionForeground); font-size: 9px; }
   .flow-node:focus rect, .flow-node:hover rect { stroke: var(--vscode-focusBorder); stroke-width: 2; }
   .flow-node[aria-pressed="true"] rect { fill: var(--vscode-charts-orange, var(--vscode-focusBorder)); stroke-width: 2; }
-  .flow-inspector { border: 1px solid var(--vscode-panel-border); min-height: 280px; padding: 14px; position: sticky; top: 90px; }
+  .flow-inspector { border: 1px solid var(--vscode-panel-border); box-sizing: border-box; display: flex; flex: 0 1 320px; flex-direction: column; max-width: 360px; min-height: 420px; min-width: 240px; padding: 14px; position: sticky; top: 90px; transition: flex-basis 180ms ease, max-width 180ms ease, min-height 180ms ease; }
   .flow-inspector h3, .flow-inspector h4 { margin: 4px 0 10px; }
-  .flow-inspector dl { display: grid; gap: 8px; margin: 0 0 16px; }
+  .flow-inspector dl { display: flex; flex-direction: column; gap: 8px; margin: 0 0 16px; }
   .flow-inspector dl div { border-bottom: 1px solid var(--vscode-panel-border); padding-bottom: 7px; }
   .flow-inspector dt { color: var(--vscode-descriptionForeground); font-size: 11px; text-transform: uppercase; }
   .flow-inspector dd { margin: 2px 0 0; overflow-wrap: anywhere; }
-  .flow-provenance { display: grid; gap: 10px; list-style: none; margin: 0; padding: 0; }
-  .flow-provenance li { display: grid; gap: 3px; }
+  .flow-provenance { display: flex; flex-direction: column; gap: 10px; list-style: none; margin: 0; padding: 0; }
+  .flow-provenance li { display: flex; flex-direction: column; gap: 3px; }
   .flow-provenance span { color: var(--vscode-descriptionForeground); }
   .flow-table caption { color: var(--vscode-descriptionForeground); padding: 8px; text-align: left; }
   section, article { border: 1px solid var(--vscode-panel-border); background: var(--vscode-sideBar-background); }
@@ -589,8 +589,9 @@ export function centerHtml(state: CenterViewState, nonce: string): string {
   .trend { height: 120px; width: 100%; } .trend line { stroke: currentColor; opacity: .2; } .trend polyline { fill: none; stroke: var(--vscode-charts-blue); stroke-width: 2; }
   .method, .empty { color: var(--vscode-descriptionForeground); } .empty { padding: 22px; text-align: center; }
   @media (forced-colors: active) { .flow-edge { opacity: 1; stroke: LinkText; } .flow-edge[aria-pressed="true"] { stroke: Highlight; } .flow-node rect { fill: Canvas; stroke: CanvasText; stroke-width: 2; } .flow-node[aria-pressed="true"] rect { fill: Highlight; } .flow-state, .flow-summary { border-color: CanvasText; } }
-  @media (max-width: 900px) { .flow-chart-layout { grid-template-columns: 1fr; } .flow-inspector { position: static; } }
-  @media (max-width: 700px) { header { padding: 14px; } main { padding: 14px; } .summary { grid-template-columns: 1fr 1fr; } .history-toolbar { align-items: stretch; } .history-search, .history-search input { width: 100%; } }
+  @media (max-width: 1000px) { .flow-chart-layout { flex-wrap: wrap; } .flow-chart-scroll { flex-basis: 100%; min-height: 460px; } .flow-inspector { flex: 1 1 100%; max-width: none; min-height: 300px; position: static; } }
+  @media (max-width: 700px) { header { padding: 14px; } main { padding: 14px; } .summary { grid-template-columns: 1fr 1fr; } .flow-filter-grid label { flex-basis: 100%; } .flow-chart-scroll { min-height: 500px; } .flow-inspector { min-width: 0; } .history-toolbar { align-items: stretch; } .history-search, .history-search input { width: 100%; } }
+  @media (prefers-reduced-motion: reduce) { .flow-chart-scroll, .flow-inspector { transition: none; } }
 </style></head><body>
 <header><div><h1>Harness Lens</h1><small>Evidence-backed workspace observability</small></div><button id="refresh">Refresh report</button></header>
 ${state.report ? '<nav aria-label="Metrics sections"><a href="#overview">Overview</a><a href="#files">Files and skills</a><a href="#findings">Findings</a><a href="#scores">Scores</a><a href="#runtime">Runtime</a><a href="#flow">Observed flow</a><a href="#plugins">Plugins</a><a href="#history">History</a></nav>' : ""}

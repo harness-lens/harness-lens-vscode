@@ -319,6 +319,7 @@ test("renders populated cyclic Sankey with proportional widths and accessible ta
     },
   }, "nonce");
   assert.match(html, /class="flow-chart"/);
+  assert.match(html, /class="flow-chart" viewBox="0 0 760 420"/);
   assert.match(html, /id="flow-inspector"/);
   assert.match(html, /Select a flow item/);
   assert.match(html, /data-flow-selection="edge-0"/);
@@ -338,6 +339,11 @@ test("renders populated cyclic Sankey with proportional widths and accessible ta
   assert.match(html, /Layered copies preserve canonical logical identity/);
   assert.match(html, /data-flow-uri="file:\/\/\/workspace\/AGENTS.md"/);
   assert.match(html, /@media \(forced-colors: active\)/);
+  assert.match(html, /\.flow-chart-layout \{[^}]*display: flex;[^}]*flex-wrap: nowrap/);
+  assert.match(html, /@media \(max-width: 1000px\) \{ \.flow-chart-layout \{ flex-wrap: wrap; \}/);
+  assert.match(html, /\.flow-chart-scroll \{ min-height: 500px; \}/);
+  assert.match(html, /@media \(prefers-reduced-motion: reduce\)/);
+  assert.ok(!html.includes(".flow-chart-layout { align-items: start; display: grid"));
   assert.match(html, /value="read"/);
   assert.match(html, /Active filters: root read/);
   const widths = [...html.matchAll(/class="flow-edge[^>]+stroke-width="([^"]+)"/g)]
