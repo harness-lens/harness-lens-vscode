@@ -53,6 +53,7 @@ The coordinated installation needs no path setting. These defaults are active:
   "harnessLens.languageServer.path": "",
   "harnessLens.report.maxFiles": 5000,
   "harnessLens.runtime.mode": "off",
+  "harnessLens.observedFlow.mode": "off",
   "harnessLens.providers.codeburn.enabled": false
 }
 ```
@@ -72,6 +73,10 @@ Other useful settings are:
 - `harnessLens.runtime.period`: validated aggregate period used in `live` mode.
 - `harnessLens.runtime.snapshotPath`: aggregate JSON file used in `snapshot`
   mode.
+- `harnessLens.observedFlow.mode`: independent `off` or sanitized `snapshot`
+  flow evidence.
+- `harnessLens.observedFlow.snapshotPath`: deny-by-default action-trace JSON
+  used only when observed-flow mode is `snapshot`.
 
 Run **Harness Lens: Restart Language Server** after changing the server path or
 arguments. Run **Harness Lens: Refresh Workspace Report** after changing report

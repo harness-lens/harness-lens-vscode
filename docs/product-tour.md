@@ -59,6 +59,21 @@ status, duration, and failure detail.
 
 ![Harness Lens runtime and plugins](../packages/extension/media/screenshots/runtime-and-plugins.png)
 
+## Observed flow
+
+The metrics center reserves Sankey presentation for measured, ordered adjacent
+actions. Link thickness is proportional to the displayed metric value. Each
+edge also shows its filtered denominator, share, sample size, window, and
+provenance in a keyboard-accessible table. Cycles repeat the canonical action
+at later layers; labels preserve its logical identity. Root, hop, window,
+category, status, minimum-share, metric, and cost-unit controls request a new
+bounded projection from the language server.
+
+Unavailable, insufficient, empty, partial, truncated, failed, and populated
+states use explicit text rather than color alone. The chart uses VS Code theme
+colors and forced-color rules, all renderer code stays in the extension, and a
+safe provenance location opens the matching source position.
+
 ## Local history
 
 The extension keeps up to 100 content-free summaries per workspace for local
@@ -69,6 +84,6 @@ comparison.
 ## Runtime settings
 
 VS Code settings control the optional executable, runtime mode, period,
-snapshot, and language-server lifecycle.
+aggregate snapshot, sanitized trace snapshot, and language-server lifecycle.
 
 ![Harness Lens runtime settings](../packages/extension/media/screenshots/runtime-settings.png)

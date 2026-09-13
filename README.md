@@ -43,6 +43,9 @@ is present. Standard diagnostics are compatible with VS Code's Problems view and
 extensions such as Error Lens. Its Activity Bar view and metrics center expose
 content-safe workspace reports, per-file context and configured input cost,
 findings, score methods, plugin execution, and local comparison history.
+Compatible servers can also supply provider-neutral observed action flow. The
+metrics center renders only measured adjacent transitions as a local CSP-safe
+Sankey plus a keyboard-accessible table; static relationships stay in the tree.
 
 Optional aggregate runtime evidence supports explicit `off`, `live`, and
 `snapshot` modes. CodeBurn provider and runtime mode both default off for each
@@ -58,6 +61,14 @@ language server initialization. The enable flow validates the schema-versioned
 provider catalog, and the metrics center validates aggregate responses before
 use. CodeBurn remains optional, separately installed, MIT-licensed, and
 unbundled; extension never downloads, installs, or updates it.
+
+Observed flow is independently consent-controlled. Set
+`harnessLens.observedFlow.mode` to `snapshot` and configure
+`harnessLens.observedFlow.snapshotPath` with deny-by-default sanitized action
+trace JSON. The extension does not analyze or persist the trace. It validates
+the bounded LSP graph response, exposes metric unit, filtered denominator,
+share, sample size, window, provenance, completeness, and filters, and keeps
+unavailable evidence distinct from zero activity.
 
 Windows users can install the VSIX and matching native language server together
 with the [coordinated installer](docs/windows-installation.md). The extension

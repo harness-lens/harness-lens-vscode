@@ -13,6 +13,7 @@ import {
 } from "vscode-languageclient/node";
 import { ObservabilityCenter } from "./center.js";
 import { resolveLanguageServerCommand } from "./language-server-path.js";
+import { ObservedFlowService } from "./observed-flow-service.js";
 import {
   ProviderProtocolService,
   type ProviderStatus,
@@ -46,6 +47,8 @@ const harnessDocumentPatterns = [
 ] as const;
 const excludePattern = "{**/.git/**,**/.venv/**,**/build/**,**/dist/**,**/node_modules/**,**/venv/**}";
 const refreshRuntimeCommand = "harnessMetrics.refreshCodeBurn";
+const refreshFlowCommand = "harnessLens.refreshObservedFlowView";
+const refreshFlowServerCommand = "harnessLens.refreshObservedFlow";
 
 interface WorkspaceHarnessFile {
   kind: HarnessKind;
@@ -73,6 +76,8 @@ function providerSettings(resource: vscode.Uri): ProviderSettings {
     executable: configuration.get<unknown>("runtime.executable"),
     period: configuration.get<unknown>("runtime.period"),
     snapshotPath: configuration.get<unknown>("runtime.snapshotPath"),
+    traceMode: configuration.get<unknown>("observedFlow.mode"),
+    traceSnapshotPath: configuration.get<unknown>("observedFlow.snapshotPath"),
     maxFiles: configuration.get<unknown>("report.maxFiles"),
   });
 }
@@ -331,25 +336,38 @@ export function activate(context: vscode.ExtensionContext): Readonly<{
     },
   );
 
-  const observability = new ObservabilityCenter(context, async (folder) => {
-    await ensureLanguageServer(context);
-    const client = languageClient;
-    if (!client) {
-      throw new Error("Language server is disabled, unavailable, or workspace is not trusted.");
-    }
-    const service = new ProviderProtocolService(
-      (method, parameters) => client.sendRequest(method, parameters),
-    );
-    const response = await service.aggregate(
-      folder.uri.toString(),
-      providerSettings(folder.uri).maxFiles,
-    );
-    return {
-      schemaVersion: response.schemaVersion,
-      reports: [response.native],
-      runtime: response.runtime,
-    };
-  });
+  const observability = new ObservabilityCenter(
+    context,
+    async (folder) => {
+      await ensureLanguageServer(context);
+      const client = languageClient;
+      if (!client) {
+        throw new Error("Language server is disabled, unavailable, or workspace is not trusted.");
+      }
+      const service = new ProviderProtocolService(
+        (method, parameters) => client.sendRequest(method, parameters),
+      );
+      const response = await service.aggregate(
+        folder.uri.toString(),
+        providerSettings(folder.uri).maxFiles,
+      );
+      return {
+        schemaVersion: response.schemaVersion,
+        reports: [response.native],
+        runtime: response.runtime,
+      };
+    },
+    async (folder, filters) => {
+      await ensureLanguageServer(context);
+      const client = languageClient;
+      if (!client) {
+        throw new Error("Language server is disabled, unavailable, or workspace is not trusted.");
+      }
+      return new ObservedFlowService(
+        (method, parameters) => client.sendRequest(method, parameters),
+      ).flow(folder.uri.toString(), filters);
+    },
+  );
   const openCenter = vscode.commands.registerCommand(
     "harnessLens.openCenter",
     () => observability.show(),
@@ -384,9 +402,45 @@ export function activate(context: vscode.ExtensionContext): Readonly<{
       await observability.refresh(false);
     },
   );
+  const refreshFlow = vscode.commands.registerCommand(
+    refreshFlowCommand,
+    async () => {
+      await ensureLanguageServer(context);
+      const client = languageClient;
+      if (!client) {
+        throw new Error("Language server is disabled, unavailable, or workspace is not trusted.");
+      }
+      const folder = vscode.window.activeTextEditor
+        ? vscode.workspace.getWorkspaceFolder(vscode.window.activeTextEditor.document.uri)
+        : vscode.workspace.workspaceFolders?.find((candidate) => candidate.uri.scheme === "file");
+      const settings = folder ? providerSettings(folder.uri) : undefined;
+      if (!settings || settings.traceMode === "off") {
+        const action = await vscode.window.showInformationMessage(
+          "Observed flow is off. Select snapshot mode and a sanitized trace path first.",
+          "Open Settings",
+        );
+        if (action === "Open Settings") {
+          await vscode.commands.executeCommand(
+            "workbench.action.openSettings",
+            "harnessLens.observedFlow",
+          );
+        }
+        return;
+      }
+      await client.sendRequest("workspace/executeCommand", {
+        command: refreshFlowServerCommand,
+        arguments: [],
+      });
+      await observability.refresh(false);
+    },
+  );
   const openSource = vscode.commands.registerCommand(
     "harnessLens.openSource",
     (target: { path: string; line?: number }) => observability.openSource(target),
+  );
+  const openFlowLocation = vscode.commands.registerCommand(
+    "harnessLens.openFlowLocation",
+    (location) => observability.openFlowLocation(location),
   );
 
   const restart = vscode.commands.registerCommand(
@@ -413,9 +467,12 @@ export function activate(context: vscode.ExtensionContext): Readonly<{
     if (
       event.affectsConfiguration("harnessLens.languageServer")
       || event.affectsConfiguration("harnessLens.runtime")
+      || event.affectsConfiguration("harnessLens.observedFlow")
       || event.affectsConfiguration("harnessLens.providers")
     ) {
-      void stopLanguageServer().then(() => ensureLanguageServer(context));
+      void stopLanguageServer()
+        .then(() => ensureLanguageServer(context))
+        .then(() => observability.refresh(false));
     }
   });
   const harnessFiles = harnessDocumentPatterns.map((pattern) =>
@@ -440,7 +497,9 @@ export function activate(context: vscode.ExtensionContext): Readonly<{
     openCenter,
     refreshObservability,
     refreshRuntime,
+    refreshFlow,
     openSource,
+    openFlowLocation,
     restart,
     documents,
     trust,

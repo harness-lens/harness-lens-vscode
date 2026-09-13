@@ -49,13 +49,15 @@ installation. CodeBurn remains optional and separate.
   window.
 - Validate schema-versioned provider catalog and aggregate envelopes before
   using Native or optional-provider status.
+- Render provider-neutral measured adjacent action transitions as an accessible
+  Sankey and equivalent table. Root, hop, window, category, status,
+  minimum-share, and width-metric filters remain server-derived and bounded.
 
 ## Not available yet
 
 - Code actions or automatic fixes.
 - Attributed per-file effectiveness.
-- Tool-call error, retry, timeout, or cost history until the provider-neutral
-  sanitized runtime trace contract is available.
+- Per-observation tool-call history and attributed effectiveness comparisons.
 
 Runtime evidence defaults to `off`, and CodeBurn remains separately disabled for
 the VS Code window. Run **Harness Lens: Enable CodeBurn Provider** to review and
@@ -70,6 +72,14 @@ is optional, MIT-licensed, and not bundled. Extension never downloads, installs,
 or updates it. Aggregate runtime evidence never changes deterministic findings
 or scores.
 
+Observed flow is separate from CodeBurn aggregate selection and defaults to
+`off`. To load a local sanitized trace, set
+`harnessLens.observedFlow.mode` to `snapshot` and
+`harnessLens.observedFlow.snapshotPath` to its JSON file. The extension passes
+only these explicit settings to the server, stores no trace, and renders only a
+validated bounded relationship graph. Use **Harness Lens: Refresh Observed
+Flow** after the snapshot changes.
+
 ## Language server
 
 Install `harness-lens-lsp` from the
@@ -82,6 +92,10 @@ The metrics center requires a server supporting
 [PR #23](https://github.com/harness-lens/language-server/pull/23) and accepted in
 immutable merge
 [`496f288`](https://github.com/harness-lens/language-server/commit/496f28889b40522676c6d7a59a0b9b2d1af8e700).
+Observed flow additionally requires `harnessLens/observedFlow` and
+`harnessLens.refreshObservedFlow` support, implemented by immutable
+language-server revision
+[`120dfab`](https://github.com/harness-lens/language-server/commit/120dfab150f1073323421be7622156c2c41dfbb0).
 Language server stays external rather than becoming bundled build dependency.
 Older servers continue to provide standard diagnostics but cannot populate dashboard.
 

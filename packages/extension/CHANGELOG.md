@@ -5,6 +5,10 @@
 
 ## Unreleased
 
+- Add a provider-neutral, accessible Sankey and equivalent table for measured
+  adjacent action transitions, with bounded server-side filters and explicit
+  evidence availability.
+
 ## 0.0.3
 
 - Add shared repository branding and the packaged Marketplace icon and banner.

@@ -9,6 +9,12 @@ locations beside each claim. The dedicated VS Code interface combines Activity
 Bar navigation with a metrics webview. Static analysis remains useful without
 runtime evidence; optional runtime evidence never changes deterministic scores.
 
+The observed-flow slice is implemented separately from per-call history:
+provider-neutral LSP projections feed a local accessible Sankey and equivalent
+table. The renderer exposes metric, denominator, share, sample size, window,
+provenance, completeness, active filters, layered cycles, and explicit missing
+evidence states. It does not persist or analyze traces in editor code.
+
 ## This PR stack
 
 - Core: content-free file measurements, configured input cost, provenance,

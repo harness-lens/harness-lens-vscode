@@ -69,6 +69,12 @@
         "icon": "$(pulse)"
       },
       {
+        "command": "harnessLens.refreshObservedFlowView",
+        "title": "Refresh Observed Flow",
+        "category": "Harness Lens",
+        "icon": "$(type-hierarchy-sub)"
+      },
+      {
         "command": "harnessLens.enableCodeBurn",
         "title": "Enable CodeBurn Provider",
         "category": "Harness Lens"
@@ -171,6 +177,19 @@
           "default": "",
           "scope": "machine-overridable",
           "description": "Canonical aggregate JSON snapshot path used only in snapshot mode."
+        },
+        "harnessLens.observedFlow.mode": {
+          "type": "string",
+          "enum": ["off", "snapshot"],
+          "default": "off",
+          "scope": "window",
+          "markdownDescription": "Provider-neutral observed-flow mode. `off` performs no trace I/O. `snapshot` reads only deny-by-default sanitized action-trace JSON from the configured local path."
+        },
+        "harnessLens.observedFlow.snapshotPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "description": "Sanitized action-trace JSON path used only for observed-flow snapshot mode."
         }
       }
     }
