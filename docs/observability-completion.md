@@ -34,6 +34,8 @@ does not persist or analyze traces in editor code.
   runtime status, and local history in Activity Bar and dedicated webview.
   Section navigation, file filtering, source navigation, runtime settings, and
   explicit refresh actions make these views usable without a separate app.
+  Findings and local history use bounded ten-row pagination so long warning
+  lists do not make the metrics center unbounded.
 
 Merge Core before SDK, then consumers. The hub's submodule pins and repository
 split documentation update only after owning PRs merge. Downstream PRs may be
@@ -45,6 +47,7 @@ published commits, not branch names or local paths.
 - [x] Core formatting, Clippy, and tests.
 - [x] SDK workspace formatting, Clippy, and tests against immutable Core SHA.
 - [x] Extension type/version checks and model/rendering tests.
+- [x] Warning/error finding pagination, including empty and multi-page states.
 - [x] VSIX archive identity, content audit, reproducible SBOMs, and checksums.
 - [x] Isolated Windows VS Code installation and extension-host activation,
   discovery, command registration, and metrics webview smoke.

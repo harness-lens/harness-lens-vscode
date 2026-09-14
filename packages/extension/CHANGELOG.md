@@ -5,6 +5,8 @@
 
 ## Unreleased
 
+- Add bottom-centered ten-row pagination to warning and error findings.
+
 ## 0.0.4
 
 - Add a provider-neutral, accessible Sankey and equivalent table for measured
