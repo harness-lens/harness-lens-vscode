@@ -11,6 +11,8 @@
 - Center the Sankey and token chart in their available desktop space, scale the
   token plot to use that space without losing overflow, keep the turn slider
   directly below its chart, and move metrics below both on narrow screens.
+- Refresh the Marketplace gallery around token navigation, workspace metrics,
+  local history, and alignment with the active VS Code theme.
 
 ## 0.0.4
 
