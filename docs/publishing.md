@@ -156,6 +156,15 @@ workflow revision, rebuilds and attests all artifacts, and refuses to upload if
 the release already has assets. This avoids deleting a release, moving its tag,
 overwriting an asset, or republishing the same registry version.
 
+If the GitHub release already has assets but npm publication failed, first fix
+and merge the release workflow. Then dispatch **Release Packages** from `main`
+with the immutable tag, leave `publish_registries` disabled, and enable only
+`recover_existing_npm`. This path skips rebuilding and attaching packages,
+downloads every existing release asset, verifies the complete `SHA256SUMS`,
+requires exactly one npm tarball, and publishes that reviewed local file. Never
+delete assets, move the tag, or substitute a locally rebuilt tarball to recover
+a registry failure.
+
 Azure DevOps global PATs retire on December 1, 2026. Keep this PAT route
 short-lived and migrate when a stable `@vscode/vsce` release supports direct
 Marketplace trusted publishing from GitHub Actions. Do not adopt a prerelease

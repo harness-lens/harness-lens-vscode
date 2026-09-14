@@ -17,6 +17,11 @@ on:
         required: true
         default: false
         type: boolean
+      recover_existing_npm:
+        description: Publish the checksum-verified npm tarball already attached to the release
+        required: true
+        default: false
+        type: boolean
 
 env:
   RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
@@ -27,6 +32,7 @@ permissions:
 jobs:
   package:
     name: Verify release artifacts
+    if: ${{ github.event_name == 'release' || !inputs.recover_existing_npm }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -109,6 +115,7 @@ jobs:
 
   windows-language-server:
     name: Build Windows language server
+    if: ${{ github.event_name == 'release' || !inputs.recover_existing_npm }}
     runs-on: windows-latest
     timeout-minutes: 20
     permissions:
@@ -352,4 +359,43 @@ jobs:
         run: sha256sum --check SHA256SUMS
 
       - name: Publish reviewed tarball with npm trusted publishing
-        run: npm publish artifacts/harness-lens-vscode-*.tgz --access public
+        run: |
+          shopt -s nullglob
+          packages=(./artifacts/harness-lens-vscode-*.tgz)
+          test "${#packages[@]}" -eq 1
+          npm publish "${packages[0]}" --access public
+
+  recover-existing-npm:
+    name: Publish existing npm release asset
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.recover_existing_npm }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Download immutable GitHub release assets
+        run: gh release download "$RELEASE_TAG" --dir artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+
+      - name: Verify complete release checksums
+        working-directory: artifacts
+        run: sha256sum --check SHA256SUMS
+
+      - name: Publish the reviewed npm tarball
+        run: |
+          shopt -s nullglob
+          packages=(./artifacts/harness-lens-vscode-*.tgz)
+          test "${#packages[@]}" -eq 1
+          npm publish "${packages[0]}" --access public
