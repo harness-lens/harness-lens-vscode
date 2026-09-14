@@ -28,7 +28,26 @@ See **[Windows install, uninstall, and extra configuration](https://github.com/h
 for uninstall instructions, custom server paths, runtime modes, and contributor
 installation. CodeBurn remains optional and separate.
 
-![Harness Lens metrics overview](https://raw.githubusercontent.com/harness-lens/harness-lens-vscode/main/packages/extension/media/screenshots/metrics-overview.png)
+## Evidence at a glance
+
+The Metrics Center follows the active VS Code theme instead of imposing a
+separate product palette. It uses editor color tokens throughout and preserves
+contrast in forced-color environments.
+
+**Navigate token use turn by turn while keeping the selected action's evidence
+and metrics visible.**
+
+![Harness Lens observed-turn token lens](https://raw.githubusercontent.com/harness-lens/harness-lens-vscode/main/packages/extension/media/screenshots/observed-turn-token-lens.png)
+
+**Review coverage, context, findings, quality, runtime status, and deterministic
+change direction together.**
+
+![Harness Lens metrics center overview](https://raw.githubusercontent.com/harness-lens/harness-lens-vscode/main/packages/extension/media/screenshots/metrics-center-overview.png)
+
+**Compare content-free local snapshots without sending workspace evidence to a
+remote dashboard.**
+
+![Harness Lens local history pagination](https://raw.githubusercontent.com/harness-lens/harness-lens-vscode/main/packages/extension/media/screenshots/local-history-pagination.png)
 
 ## Available today
 
@@ -81,8 +100,8 @@ validated bounded relationship graph and aligned per-turn token timeline. The
 token lens distinguishes measured and explicitly estimated totals, keeps absent
 usage as a gap, and synchronizes its slider with layered Sankey actions. Its
 wide layout scales centered visualization controls beside the metrics without
-hiding overflow; narrow layouts place the metrics below the chart and slider. Use
-**Harness Lens: Refresh Observed Flow** after the snapshot changes.
+hiding overflow; narrow layouts place the metrics below the chart and slider.
+Use **Harness Lens: Refresh Observed Flow** after the snapshot changes.
 
 ## Language server
 
