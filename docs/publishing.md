@@ -39,6 +39,22 @@ and retain npm trusted publishing with:
 Create the `npm` GitHub environment with required reviewers. GitHub releases
 publish through OIDC; no `NPM_TOKEN` secret is needed.
 
+An npm maintainer can audit this one-time administrative state with:
+
+```bash
+npm trust list @harness-lens/vscode
+```
+
+The command requires an authenticated maintainer and may require interactive
+2FA. Confirm the repository, workflow filename, environment, and `npm publish`
+permission match exactly; the values are case-sensitive. Log out after
+administrative maintenance so a registry credential is not retained merely to
+support OIDC publishing:
+
+```bash
+npm logout --registry=https://registry.npmjs.org/
+```
+
 ## Visual Studio Marketplace
 
 The publisher ID is `harness-lens`, and the extension ID is
@@ -165,11 +181,55 @@ requires exactly one npm tarball, and publishes that reviewed local file. Never
 delete assets, move the tag, or substitute a locally rebuilt tarball to recover
 a registry failure.
 
+Registry recovery is single-use for a package version. Before dispatch, confirm
+the target version is absent. If it already exists, stop; npm versions are
+immutable and another recovery is neither required nor valid.
+
+```bash
+release_version=0.0.5
+npm view "@harness-lens/vscode@${release_version}" version
+```
+
+After a successful job, require all of these signals before declaring recovery
+complete:
+
+1. The checksum step passed for every entry in `SHA256SUMS`.
+2. The publish log contains `+ @harness-lens/vscode@<version>`.
+3. The public version endpoint and tarball both return successfully.
+4. `dist-tags.latest` names the released version.
+5. Registry metadata exposes package integrity and SLSA provenance.
+
+Registry CDN metadata can briefly lag a successful publication. A stale
+`npm view` result alone must not trigger another publish. Retry verification
+with a bounded wait and a cache-busting version request first:
+
+```bash
+release_version=0.0.5
+cache_buster=$(date +%s)
+curl --fail --silent --show-error \
+  "https://registry.npmjs.org/@harness-lens%2fvscode/${release_version}?cache=${cache_buster}" \
+  | jq -e --arg version "$release_version" '.version == $version'
+curl --fail --head \
+  "https://registry.npmjs.org/@harness-lens/vscode/-/vscode-${release_version}.tgz?cache=${cache_buster}"
+npm view @harness-lens/vscode dist-tags.latest --prefer-online
+```
+
+When OIDC fails without a useful npm error, diagnose only in GitHub Actions with
+the reviewed release tarball and `npm publish --dry-run --loglevel verbose`.
+Dry-run may exit successfully even when authentication failed, so inspect the
+OIDC exchange itself. A successful GitHub ID-token request followed by
+`POST .../oidc/token/exchange/... 404` and `package not found` means the npm
+trusted publisher is absent or does not exactly match. Do not add a classic
+`NPM_TOKEN` as a workaround.
+
 The npm publishing jobs intentionally omit `setup-node`'s `registry-url` input.
 That input writes an `_authToken` placeholder to a temporary `.npmrc`; without a
 classic npm token, the empty placeholder can prevent npm from using the GitHub
 OIDC identity configured for trusted publishing. The package's default registry
 and `publishConfig.access` still select the public npm registry.
+
+See the [npm 0.0.5 release incident](incidents/2026-09-14-npm-v0.0.5.md) for
+the failure sequence, evidence, and recovery validation behind these controls.
 
 Azure DevOps global PATs retire on December 1, 2026. Keep this PAT route
 short-lived and migrate when a stable `@vscode/vsce` release supports direct
