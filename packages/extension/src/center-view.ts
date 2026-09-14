@@ -314,14 +314,17 @@ function tokenLens(flow: ObservedFlowResponse): string {
     1,
     ...timeline.turns.map((turn) => turn.tokenUsage?.totalTokens ?? 0),
   );
-  const baseline = 126;
-  const maximumBarHeight = 94;
+  const chartHeight = 360;
+  const baseline = 326;
+  const maximumBarHeight = 282;
   const barWidth = 20;
   const barStep = 34;
-  const chartWidth = Math.max(760, timeline.turns.length * barStep + 42);
+  const contentWidth = (timeline.turns.length - 1) * barStep + barWidth;
+  const chartWidth = Math.max(760, contentWidth + 56);
+  const startX = (chartWidth - contentWidth) / 2;
   const sessionBreaks: string[] = [];
   const bars = timeline.turns.map((turn, index) => {
-    const x = 28 + index * barStep;
+    const x = startX + index * barStep;
     if (index > 0 && timeline.turns[index - 1]!.sessionId !== turn.sessionId) {
       sessionBreaks.push(`<line class="token-session-break" x1="${x - 7}" y1="18" x2="${x - 7}" y2="${baseline + 3}"><title>Session boundary</title></line>`);
     }
@@ -348,7 +351,7 @@ function tokenLens(flow: ObservedFlowResponse): string {
       ? `Turn ${index + 1}, ${turn.action.label}, ${usage.totalTokens} tokens${usage.estimated ? ", estimated" : ", measured"}`
       : `Turn ${index + 1}, ${turn.action.label}, token evidence unavailable`;
     return `<g class="token-bar selectable" tabindex="0" role="button" aria-pressed="false" aria-controls="token-turn-detail" aria-label="${escapeHtml(`${label}. Select this turn.`)}" data-token-index="${index}" data-token-layer="${turn.layer}" data-token-action="${escapeHtml(turn.action.id)}">
-      <rect class="token-hit-area" x="${x - 4}" y="18" width="${barWidth + 8}" height="${baseline - 12}" />${shapes}<text class="token-axis-label" x="${x + barWidth / 2}" y="148" text-anchor="middle">${index + 1}</text><title>${escapeHtml(label)}</title>
+      <rect class="token-hit-area" x="${x - 4}" y="18" width="${barWidth + 8}" height="${baseline - 12}" />${shapes}<text class="token-axis-label" x="${x + barWidth / 2}" y="348" text-anchor="middle">${index + 1}</text><title>${escapeHtml(label)}</title>
     </g>`;
   }).join("");
   const templates = timeline.turns.map((turn, index) =>
@@ -358,10 +361,12 @@ function tokenLens(flow: ObservedFlowResponse): string {
     <div class="token-lens-heading"><div><h3>Turn token lens</h3><p>Slide across turns to compare token consumption while actions load files and produce output.</p></div><span>${timeline.sampleSize} of ${timeline.turns.length} returned turns · ${timeline.method}</span></div>
     <div class="token-legend" aria-label="Token bar legend"><span class="input">Input</span><span class="output">Output</span><span class="cached">Cached input subset</span><span class="gap">Unavailable</span></div>
     <div class="token-lens-layout">
-      <div class="token-chart-scroll"><svg id="token-chart" class="token-chart" viewBox="0 0 ${chartWidth} 160" width="${chartWidth}" height="160" role="img" aria-labelledby="token-chart-title token-chart-description"><title id="token-chart-title">Token consumption by observed turn</title><desc id="token-chart-description">Stacked input and output token bars. Cached input is marked within input. Dashed markers are missing evidence, not zero.</desc><line class="token-baseline" x1="18" y1="${baseline}" x2="${chartWidth - 12}" y2="${baseline}" />${sessionBreaks.join("")}${bars}</svg></div>
+      <div class="token-visualization">
+        <div class="token-chart-scroll"><svg id="token-chart" class="token-chart" viewBox="0 0 ${chartWidth} ${chartHeight}" width="${chartWidth}" height="${chartHeight}" role="img" aria-labelledby="token-chart-title token-chart-description"><title id="token-chart-title">Token consumption by observed turn</title><desc id="token-chart-description">Stacked input and output token bars. Cached input is marked within input. Dashed markers are missing evidence, not zero.</desc><line class="token-baseline" x1="18" y1="${baseline}" x2="${chartWidth - 12}" y2="${baseline}" />${sessionBreaks.join("")}${bars}</svg></div>
+        <label class="token-slider-label" for="token-turn-slider"><span>Observed turn</span><input id="token-turn-slider" type="range" min="0" max="${timeline.turns.length - 1}" value="0" step="1" aria-controls="token-chart token-turn-detail"><output id="token-turn-position" for="token-turn-slider">1 of ${timeline.turns.length}</output></label>
+      </div>
       <aside id="token-turn-detail" class="token-turn-detail" aria-live="polite">${tokenTurnDetail(timeline.turns[0]!, 0, timeline.turns.length)}</aside>
     </div>
-    <label class="token-slider-label" for="token-turn-slider"><span>Observed turn</span><input id="token-turn-slider" type="range" min="0" max="${timeline.turns.length - 1}" value="0" step="1" aria-controls="token-chart token-turn-detail"><output id="token-turn-position" for="token-turn-slider">1 of ${timeline.turns.length}</output></label>
     <p class="method">${escapeHtml(completeness)}. Sample size ${timeline.sampleSize}; showing ${timeline.turns.length} of ${timeline.totalTurns} matching turns. Bar height uses measured or explicitly estimated total tokens.</p>
     ${templates}
   </div>`;
@@ -671,7 +676,7 @@ export function centerHtml(state: CenterViewState, nonce: string): string {
   .flow-summary p { margin: 4px 0; }
   .flow-chart-layout { align-items: stretch; display: flex; flex-wrap: nowrap; gap: 12px; min-width: 0; }
   .flow-chart-scroll { align-items: center; border: 1px solid var(--vscode-panel-border); display: flex; flex: 1 1 620px; min-height: 420px; min-width: 0; overflow: auto; transition: flex-basis 180ms ease, min-height 180ms ease; }
-  .flow-chart { background: var(--vscode-editor-background); display: block; flex: 0 0 auto; }
+  .flow-chart { background: var(--vscode-editor-background); display: block; flex: 0 0 auto; margin: auto; }
   .flow-edge { fill: none; opacity: .55; stroke: var(--vscode-charts-blue); }
   .selectable { cursor: pointer; }
   .flow-edge:focus, .flow-edge:hover { opacity: 1; stroke: var(--vscode-focusBorder); }
@@ -703,8 +708,9 @@ export function centerHtml(state: CenterViewState, nonce: string): string {
   .token-legend .cached::before { background: var(--vscode-charts-purple, var(--vscode-charts-orange)); }
   .token-legend .gap::before { border-style: dashed; }
   .token-lens-layout { align-items: stretch; display: flex; flex-wrap: nowrap; gap: 12px; min-width: 0; }
-  .token-chart-scroll { border: 1px solid var(--vscode-panel-border); display: flex; flex: 1 1 620px; min-width: 0; overflow: auto; transition: flex-basis 180ms ease; }
-  .token-chart { background: var(--vscode-editor-background); display: block; flex: 0 0 auto; }
+  .token-visualization { display: flex; flex: 1 1 620px; flex-direction: column; min-width: 0; }
+  .token-chart-scroll { align-items: center; background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border); box-sizing: border-box; display: flex; flex: 1 1 auto; min-height: 300px; min-width: 0; overflow: auto; transition: min-height 180ms ease; width: 100%; }
+  .token-chart { display: block; flex: 0 0 auto; height: auto; margin: auto; min-width: min(100%, 1400px); }
   .token-baseline, .token-session-break { stroke: var(--vscode-panel-border); stroke-width: 1; }
   .token-session-break { stroke-dasharray: 3 4; }
   .token-hit-area { fill: transparent; stroke: transparent; stroke-width: 2; }
@@ -722,7 +728,7 @@ export function centerHtml(state: CenterViewState, nonce: string): string {
   .token-turn-detail dl div { border-bottom: 1px solid var(--vscode-panel-border); padding-bottom: 5px; }
   .token-turn-detail dt { color: var(--vscode-descriptionForeground); font-size: 10px; text-transform: uppercase; }
   .token-turn-detail dd { margin: 1px 0 0; overflow-wrap: anywhere; }
-  .token-slider-label { align-items: center; display: flex; gap: 10px; margin: 12px 0 4px; }
+  .token-slider-label { align-items: center; display: flex; gap: 10px; margin: 12px 0 0; }
   .token-slider-label input { flex: 1 1 auto; min-width: 0; padding: 0; }
   .token-slider-label output { min-width: 70px; text-align: right; }
   section, article { border: 1px solid var(--vscode-panel-border); background: var(--vscode-sideBar-background); }
@@ -745,8 +751,8 @@ export function centerHtml(state: CenterViewState, nonce: string): string {
   .trend { height: 120px; width: 100%; } .trend line { stroke: currentColor; opacity: .2; } .trend polyline { fill: none; stroke: var(--vscode-charts-blue); stroke-width: 2; }
   .method, .empty { color: var(--vscode-descriptionForeground); } .empty { padding: 22px; text-align: center; }
   @media (forced-colors: active) { .flow-edge { opacity: 1; stroke: LinkText; } .flow-edge[aria-pressed="true"] { stroke: Highlight; } .flow-node rect, .token-input, .token-output, .token-total, .token-cached { fill: Canvas; stroke: CanvasText; stroke-width: 2; } .flow-node[aria-pressed="true"] rect, .flow-node.token-highlight rect, .token-bar[aria-pressed="true"] .token-hit-area { fill: Highlight; stroke: Highlight; } .flow-state, .flow-summary, .token-lens { border-color: CanvasText; } }
-  @media (max-width: 1000px) { .flow-chart-layout, .token-lens-layout { flex-wrap: wrap; } .flow-chart-scroll { flex-basis: 100%; min-height: 460px; } .flow-inspector { flex: 1 1 100%; max-width: none; min-height: 300px; position: static; } .token-chart-scroll { flex-basis: 100%; } .token-turn-detail { flex: 1 1 100%; max-width: none; min-width: 0; } }
-  @media (max-width: 700px) { header { padding: 14px; } main { padding: 14px; } .summary { grid-template-columns: 1fr 1fr; } .flow-filter-grid label { flex-basis: 100%; } .flow-chart-scroll { min-height: 500px; } .flow-inspector { min-width: 0; } .token-lens { padding: 10px; } .token-slider-label { align-items: stretch; flex-direction: column; } .token-slider-label output { text-align: left; } .history-toolbar { align-items: stretch; } .history-search, .history-search input { width: 100%; } }
+  @media (max-width: 1000px) { .flow-chart-layout, .token-lens-layout { flex-wrap: wrap; } .flow-chart-scroll { flex-basis: 100%; min-height: 460px; } .flow-inspector { flex: 1 1 100%; max-width: none; min-height: 300px; position: static; } .token-visualization { flex: 1 1 100%; min-width: 0; } .token-turn-detail { flex: 1 1 100%; max-width: none; min-width: 0; } }
+  @media (max-width: 700px) { header { padding: 14px; } main { padding: 14px; } .summary { grid-template-columns: 1fr 1fr; } .flow-filter-grid label { flex-basis: 100%; } .flow-chart-scroll { min-height: 500px; } .flow-inspector { min-width: 0; } .token-lens { padding: 10px; } .token-chart-scroll { min-height: 260px; } .token-slider-label { align-items: stretch; flex-direction: column; } .token-slider-label output { text-align: left; } .history-toolbar { align-items: stretch; } .history-search, .history-search input { width: 100%; } }
   @media (prefers-reduced-motion: reduce) { .flow-chart-scroll, .flow-inspector, .token-chart-scroll, .token-turn-detail { transition: none; } }
 </style></head><body>
 <header><div><h1>Harness Lens</h1><small>Evidence-backed workspace observability</small></div><button id="refresh">Refresh report</button></header>

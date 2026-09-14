@@ -23,7 +23,7 @@ Close and reopen VS Code after installation. To install a specific release,
 download the installer from that tag and pass the same value:
 
 ```powershell
-$version = "v0.0.4"
+$version = "v0.0.5"
 Invoke-WebRequest "https://github.com/harness-lens/harness-lens-vscode/releases/download/$version/install-harness-lens.ps1" -OutFile $installer
 powershell -ExecutionPolicy Bypass -File $installer -Version $version
 ```

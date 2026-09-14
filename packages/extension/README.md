@@ -79,7 +79,9 @@ Observed flow is separate from CodeBurn aggregate selection and defaults to
 only these explicit settings to the server, stores no trace, and renders only a
 validated bounded relationship graph and aligned per-turn token timeline. The
 token lens distinguishes measured and explicitly estimated totals, keeps absent
-usage as a gap, and synchronizes its slider with layered Sankey actions. Use
+usage as a gap, and synchronizes its slider with layered Sankey actions. Its
+wide layout scales centered visualization controls beside the metrics without
+hiding overflow; narrow layouts place the metrics below the chart and slider. Use
 **Harness Lens: Refresh Observed Flow** after the snapshot changes.
 
 ## Language server
