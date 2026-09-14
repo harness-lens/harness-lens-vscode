@@ -5,6 +5,9 @@
 
 ## Unreleased
 
+- Fix npm release publication to use an unambiguous local tarball path and add
+  checksum-verified recovery from immutable GitHub release assets.
+
 ## 0.0.5
 
 - Add bottom-centered ten-row pagination to warning and error findings.
