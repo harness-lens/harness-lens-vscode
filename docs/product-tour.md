@@ -74,7 +74,8 @@ A responsive token lens below the Sankey stacks input and output counts per
 turn, marks cached input as a subset, and preserves missing measurements as
 gaps. Its slider synchronizes the selected turn with the corresponding layered
 action and shows measured/estimated status, attributed cost, and safe source
-navigation.
+navigation. On wide screens, the centered chart and its slider stay beside the
+turn metrics. On narrow screens, the metrics move below the chart and slider.
 
 Unavailable, insufficient, empty, partial, truncated, failed, and populated
 states use explicit text rather than color alone. The chart uses VS Code theme

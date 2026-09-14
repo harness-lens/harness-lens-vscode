@@ -8,6 +8,9 @@
 ## 0.0.5
 
 - Add bottom-centered ten-row pagination to warning and error findings.
+- Center the Sankey and token chart in their available desktop space, keep the
+  turn slider directly below its chart, and move metrics below both on narrow
+  screens.
 
 ## 0.0.4
 

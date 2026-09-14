@@ -339,6 +339,7 @@ test("renders populated cyclic Sankey with proportional widths and accessible ta
   assert.match(html, /Layered copies preserve canonical logical identity/);
   assert.match(html, /data-flow-uri="file:\/\/\/workspace\/AGENTS.md"/);
   assert.match(html, /id="token-lens"[^>]*data-token-turns="3"/);
+  assert.match(html, /class="token-visualization"/);
   assert.match(html, /id="token-chart"/);
   assert.match(html, /id="token-turn-slider"[^>]*max="2"/);
   assert.match(html, /class="token-input"/);
@@ -354,12 +355,18 @@ test("renders populated cyclic Sankey with proportional widths and accessible ta
   assert.match(html, /tokenSlider\?\.addEventListener\('input'/);
   assert.match(html, /@media \(forced-colors: active\)/);
   assert.match(html, /\.flow-chart-layout \{[^}]*display: flex;[^}]*flex-wrap: nowrap/);
+  assert.match(html, /\.flow-chart \{[^}]*margin: auto/);
+  assert.match(html, /\.token-visualization \{[^}]*flex-direction: column/);
+  assert.match(html, /\.token-chart \{[^}]*margin: auto/);
   assert.match(html, /@media \(max-width: 1000px\) \{ \.flow-chart-layout, \.token-lens-layout \{ flex-wrap: wrap; \}/);
   assert.match(html, /\.flow-chart-scroll \{ min-height: 500px; \}/);
   assert.match(html, /\.flow-chart-layout, \.token-lens-layout \{ flex-wrap: wrap; \}/);
+  assert.match(html, /\.token-visualization \{ flex: 1 1 100%; min-width: 0; \}/);
   assert.match(html, /\.token-slider-label \{ align-items: stretch; flex-direction: column; \}/);
   assert.match(html, /@media \(prefers-reduced-motion: reduce\)/);
   assert.ok(!html.includes(".flow-chart-layout { align-items: start; display: grid"));
+  assert.ok(html.indexOf('class="token-chart-scroll"') < html.indexOf('id="token-turn-slider"'));
+  assert.ok(html.indexOf('id="token-turn-slider"') < html.indexOf('id="token-turn-detail"'));
   assert.match(html, /value="read"/);
   assert.match(html, /Active filters: root read/);
   const widths = [...html.matchAll(/class="flow-edge[^>]+stroke-width="([^"]+)"/g)]
