@@ -341,6 +341,7 @@ test("renders populated cyclic Sankey with proportional widths and accessible ta
   assert.match(html, /id="token-lens"[^>]*data-token-turns="3"/);
   assert.match(html, /class="token-visualization"/);
   assert.match(html, /id="token-chart"/);
+  assert.match(html, /class="token-chart" viewBox="0 0 760 360" width="760" height="360"/);
   assert.match(html, /id="token-turn-slider"[^>]*max="2"/);
   assert.match(html, /class="token-input"/);
   assert.match(html, /class="token-output"/);
@@ -357,7 +358,7 @@ test("renders populated cyclic Sankey with proportional widths and accessible ta
   assert.match(html, /\.flow-chart-layout \{[^}]*display: flex;[^}]*flex-wrap: nowrap/);
   assert.match(html, /\.flow-chart \{[^}]*margin: auto/);
   assert.match(html, /\.token-visualization \{[^}]*flex-direction: column/);
-  assert.match(html, /\.token-chart \{[^}]*margin: auto/);
+  assert.match(html, /\.token-chart \{[^}]*height: auto;[^}]*margin: auto;[^}]*min-width: min\(100%, 1400px\)/);
   assert.match(html, /@media \(max-width: 1000px\) \{ \.flow-chart-layout, \.token-lens-layout \{ flex-wrap: wrap; \}/);
   assert.match(html, /\.flow-chart-scroll \{ min-height: 500px; \}/);
   assert.match(html, /\.flow-chart-layout, \.token-lens-layout \{ flex-wrap: wrap; \}/);

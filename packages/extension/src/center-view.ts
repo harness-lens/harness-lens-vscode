@@ -314,14 +314,17 @@ function tokenLens(flow: ObservedFlowResponse): string {
     1,
     ...timeline.turns.map((turn) => turn.tokenUsage?.totalTokens ?? 0),
   );
-  const baseline = 126;
-  const maximumBarHeight = 94;
+  const chartHeight = 360;
+  const baseline = 326;
+  const maximumBarHeight = 282;
   const barWidth = 20;
   const barStep = 34;
-  const chartWidth = Math.max(760, timeline.turns.length * barStep + 42);
+  const contentWidth = (timeline.turns.length - 1) * barStep + barWidth;
+  const chartWidth = Math.max(760, contentWidth + 56);
+  const startX = (chartWidth - contentWidth) / 2;
   const sessionBreaks: string[] = [];
   const bars = timeline.turns.map((turn, index) => {
-    const x = 28 + index * barStep;
+    const x = startX + index * barStep;
     if (index > 0 && timeline.turns[index - 1]!.sessionId !== turn.sessionId) {
       sessionBreaks.push(`<line class="token-session-break" x1="${x - 7}" y1="18" x2="${x - 7}" y2="${baseline + 3}"><title>Session boundary</title></line>`);
     }
@@ -348,7 +351,7 @@ function tokenLens(flow: ObservedFlowResponse): string {
       ? `Turn ${index + 1}, ${turn.action.label}, ${usage.totalTokens} tokens${usage.estimated ? ", estimated" : ", measured"}`
       : `Turn ${index + 1}, ${turn.action.label}, token evidence unavailable`;
     return `<g class="token-bar selectable" tabindex="0" role="button" aria-pressed="false" aria-controls="token-turn-detail" aria-label="${escapeHtml(`${label}. Select this turn.`)}" data-token-index="${index}" data-token-layer="${turn.layer}" data-token-action="${escapeHtml(turn.action.id)}">
-      <rect class="token-hit-area" x="${x - 4}" y="18" width="${barWidth + 8}" height="${baseline - 12}" />${shapes}<text class="token-axis-label" x="${x + barWidth / 2}" y="148" text-anchor="middle">${index + 1}</text><title>${escapeHtml(label)}</title>
+      <rect class="token-hit-area" x="${x - 4}" y="18" width="${barWidth + 8}" height="${baseline - 12}" />${shapes}<text class="token-axis-label" x="${x + barWidth / 2}" y="348" text-anchor="middle">${index + 1}</text><title>${escapeHtml(label)}</title>
     </g>`;
   }).join("");
   const templates = timeline.turns.map((turn, index) =>
@@ -359,7 +362,7 @@ function tokenLens(flow: ObservedFlowResponse): string {
     <div class="token-legend" aria-label="Token bar legend"><span class="input">Input</span><span class="output">Output</span><span class="cached">Cached input subset</span><span class="gap">Unavailable</span></div>
     <div class="token-lens-layout">
       <div class="token-visualization">
-        <div class="token-chart-scroll"><svg id="token-chart" class="token-chart" viewBox="0 0 ${chartWidth} 160" width="${chartWidth}" height="160" role="img" aria-labelledby="token-chart-title token-chart-description"><title id="token-chart-title">Token consumption by observed turn</title><desc id="token-chart-description">Stacked input and output token bars. Cached input is marked within input. Dashed markers are missing evidence, not zero.</desc><line class="token-baseline" x1="18" y1="${baseline}" x2="${chartWidth - 12}" y2="${baseline}" />${sessionBreaks.join("")}${bars}</svg></div>
+        <div class="token-chart-scroll"><svg id="token-chart" class="token-chart" viewBox="0 0 ${chartWidth} ${chartHeight}" width="${chartWidth}" height="${chartHeight}" role="img" aria-labelledby="token-chart-title token-chart-description"><title id="token-chart-title">Token consumption by observed turn</title><desc id="token-chart-description">Stacked input and output token bars. Cached input is marked within input. Dashed markers are missing evidence, not zero.</desc><line class="token-baseline" x1="18" y1="${baseline}" x2="${chartWidth - 12}" y2="${baseline}" />${sessionBreaks.join("")}${bars}</svg></div>
         <label class="token-slider-label" for="token-turn-slider"><span>Observed turn</span><input id="token-turn-slider" type="range" min="0" max="${timeline.turns.length - 1}" value="0" step="1" aria-controls="token-chart token-turn-detail"><output id="token-turn-position" for="token-turn-slider">1 of ${timeline.turns.length}</output></label>
       </div>
       <aside id="token-turn-detail" class="token-turn-detail" aria-live="polite">${tokenTurnDetail(timeline.turns[0]!, 0, timeline.turns.length)}</aside>
@@ -706,8 +709,8 @@ export function centerHtml(state: CenterViewState, nonce: string): string {
   .token-legend .gap::before { border-style: dashed; }
   .token-lens-layout { align-items: stretch; display: flex; flex-wrap: nowrap; gap: 12px; min-width: 0; }
   .token-visualization { display: flex; flex: 1 1 620px; flex-direction: column; min-width: 0; }
-  .token-chart-scroll { align-items: center; border: 1px solid var(--vscode-panel-border); box-sizing: border-box; display: flex; flex: 1 1 auto; min-height: 300px; min-width: 0; overflow: auto; transition: min-height 180ms ease; width: 100%; }
-  .token-chart { background: var(--vscode-editor-background); display: block; flex: 0 0 auto; margin: auto; }
+  .token-chart-scroll { align-items: center; background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border); box-sizing: border-box; display: flex; flex: 1 1 auto; min-height: 300px; min-width: 0; overflow: auto; transition: min-height 180ms ease; width: 100%; }
+  .token-chart { display: block; flex: 0 0 auto; height: auto; margin: auto; min-width: min(100%, 1400px); }
   .token-baseline, .token-session-break { stroke: var(--vscode-panel-border); stroke-width: 1; }
   .token-session-break { stroke-dasharray: 3 4; }
   .token-hit-area { fill: transparent; stroke: transparent; stroke-width: 2; }
