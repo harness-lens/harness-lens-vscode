@@ -21,7 +21,7 @@ The metrics center reports coverage, discovered files, estimated context,
 configured input cost, findings, quality, runtime state, and deterministic
 change direction.
 
-![Harness Lens metrics overview](../packages/extension/media/screenshots/metrics-overview.png)
+![Harness Lens metrics center overview](../packages/extension/media/screenshots/metrics-center-overview.png)
 
 ## Partial coverage
 
@@ -78,17 +78,20 @@ navigation. On wide screens, the centered chart grows into the available space
 and its slider stays beside the turn metrics. On narrow screens, the metrics
 move below the chart and slider.
 
+![Harness Lens observed-turn token lens](../packages/extension/media/screenshots/observed-turn-token-lens.png)
+
 Unavailable, insufficient, empty, partial, truncated, failed, and populated
-states use explicit text rather than color alone. The chart uses VS Code theme
-colors and forced-color rules, all renderer code stays in the extension, and a
-safe provenance location opens the matching source position.
+states use explicit text rather than color alone. The entire Metrics Center
+follows the active VS Code theme using editor color tokens, and the charts add
+forced-color rules. All renderer code stays in the extension, and a safe
+provenance location opens the matching source position.
 
 ## Local history
 
 The extension keeps up to 100 content-free summaries per workspace for local
 comparison.
 
-![Harness Lens local history](../packages/extension/media/screenshots/local-history.png)
+![Harness Lens local history pagination](../packages/extension/media/screenshots/local-history-pagination.png)
 
 ## Runtime settings
 
