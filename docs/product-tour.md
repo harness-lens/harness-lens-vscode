@@ -41,7 +41,8 @@ counts, and effectiveness state separate for each discovered asset.
 ## Findings and evidence
 
 Warnings link to their source location and show the rule, human-readable
-message, bounded evidence, and assumptions used by heuristic checks.
+message, bounded evidence, and assumptions used by heuristic checks. Long
+warning/error lists use bottom-centered ten-row pagination.
 
 ![Harness Lens findings with evidence](../packages/extension/media/screenshots/findings-with-evidence.png)
 

@@ -386,10 +386,38 @@ test("renders searchable, paginated local history controls", () => {
   assert.match(html, /id="history-previous"/);
   assert.match(html, /id="history-page-status"/);
   assert.match(html, /id="history-next"/);
-  assert.match(html, /\.history-pagination \{[^}]*justify-content: center/);
+  assert.match(html, /\.table-pagination \{[^}]*justify-content: center/);
   assert.match(html, /Math\.ceil\(matching\.length \/ historyPageSize\)/);
   assert.ok(html.indexOf('id="history-search"') < html.indexOf("data-history-row"));
   assert.ok(html.lastIndexOf("<tr data-history-row>") < html.indexOf('id="history-next"'));
+});
+
+test("renders paginated warning and error finding controls", () => {
+  const value = report();
+  value.findings = Array.from({ length: 12 }, (_, index) => ({
+    severity: index % 2 === 0 ? "warning" as const : "error" as const,
+    rule_id: `HL${String(index + 1).padStart(3, "0")}`,
+    message: `Finding ${index + 1}`,
+    path: "AGENTS.md",
+    line: index + 1,
+    evidence: `bounded evidence ${index + 1}`,
+    source: "harness-lens.test",
+  }));
+  const html = centerHtml({
+    report: value,
+    history: [],
+    flowFilters: defaultObservedFlowFilters,
+  }, "nonce");
+
+  assert.equal([...html.matchAll(/<tr data-finding-row>/g)].length, 12);
+  assert.match(html, /id="findings" data-findings-page-size="10"/);
+  assert.match(html, /id="findings-previous"/);
+  assert.match(html, /id="findings-page-status"/);
+  assert.match(html, /id="findings-next"/);
+  assert.match(html, /\.table-pagination \{[^}]*justify-content: center/);
+  assert.match(html, /Math\.ceil\(findingsRows\.length \/ findingsPageSize\)/);
+  assert.match(html, /findingsNoResults\.hidden = findingsRows\.length !== 0/);
+  assert.ok(html.lastIndexOf("<tr data-finding-row>") < html.indexOf('id="findings-next"'));
 });
 
 test("renders unavailable, insufficient, empty, partial, truncated, and filtered states", () => {

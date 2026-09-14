@@ -99,7 +99,7 @@ Observed flow and the per-turn token timeline additionally require
 language-server
 [PR #35](https://github.com/harness-lens/language-server/pull/35), pinned at
 immutable revision
-[`982beb4`](https://github.com/harness-lens/language-server/commit/982beb497896798e1fa72ec938330516a1db7d1b).
+[`2b7d66b`](https://github.com/harness-lens/language-server/commit/2b7d66b0d05961d3556e1cc39fd9f8f56fa7f1b4).
 Language server stays external rather than becoming bundled build dependency.
 Older servers continue to provide standard diagnostics but cannot populate dashboard.
 

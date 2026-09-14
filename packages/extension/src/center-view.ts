@@ -525,7 +525,7 @@ function reportBody(
 
   const findingRows = report.findings
     .filter((finding) => finding.severity !== "pass")
-    .map((finding) => `<tr>
+    .map((finding) => `<tr data-finding-row>
       <td><span class="severity ${escapeHtml(finding.severity)}">${escapeHtml(finding.severity)}</span></td>
       <td>${escapeHtml(finding.rule_id)}</td>
       <td>${finding.path
@@ -584,9 +584,15 @@ function reportBody(
     <div class="scroll"><table><thead><tr><th>File</th><th>Bytes</th><th>Context</th><th>Input cost / invocation</th><th>Configured total cost</th><th>Findings</th><th>Effectiveness</th></tr></thead><tbody>${assetRows || '<tr><td colspan="7">No harness files found.</td></tr>'}</tbody></table></div>
   </section>
 
-  <section id="findings">
+  <section id="findings" data-findings-page-size="10">
     <h2>Findings</h2>
-    <div class="scroll"><table><thead><tr><th>Severity</th><th>Rule</th><th>Location</th><th>Evidence</th></tr></thead><tbody>${findingRows || '<tr><td colspan="4">No warning or error findings.</td></tr>'}</tbody></table></div>
+    <p>Warnings and errors are shown ten at a time. Pagination does not change deterministic finding counts.</p>
+    <div class="scroll"><table><thead><tr><th>Severity</th><th>Rule</th><th>Location</th><th>Evidence</th></tr></thead><tbody>${findingRows}<tr id="findings-no-results" hidden><td colspan="4">No warning or error findings.</td></tr></tbody></table></div>
+    <nav class="table-pagination findings-pagination" aria-label="Finding pages">
+      <button type="button" id="findings-previous">Previous</button>
+      <span id="findings-page-status" role="status" aria-live="polite"></span>
+      <button type="button" id="findings-next">Next</button>
+    </nav>
   </section>
 
   <section id="scores">
@@ -615,7 +621,7 @@ function reportBody(
       <span id="history-filter-status" role="status" aria-live="polite"></span>
     </div>
     <div class="scroll"><table><thead><tr><th>Recorded</th><th>Coverage</th><th>Files</th><th>Tokens</th><th>Errors</th><th>Warnings</th><th>Quality</th></tr></thead><tbody>${historyRows}<tr id="history-no-results" hidden><td colspan="7">No local snapshots recorded.</td></tr></tbody></table></div>
-    <nav class="history-pagination" aria-label="Local history pages">
+    <nav class="table-pagination history-pagination" aria-label="Local history pages">
       <button type="button" id="history-previous">Previous</button>
       <span id="history-page-status" role="status" aria-live="polite"></span>
       <button type="button" id="history-next">Next</button>
@@ -731,8 +737,8 @@ export function centerHtml(state: CenterViewState, nonce: string): string {
   .scroll { overflow-x: auto; } table { border-collapse: collapse; width: 100%; } th, td { border-bottom: 1px solid var(--vscode-panel-border); padding: 9px 10px; text-align: left; vertical-align: top; } th { color: var(--vscode-descriptionForeground); font-size: 11px; text-transform: uppercase; }
   .history-toolbar { align-items: end; display: flex; flex-wrap: wrap; gap: 10px 16px; justify-content: flex-start; margin: 12px 0; }
   .history-search { display: grid; gap: 4px; }
-  .history-pagination { align-items: center; border: 0; display: flex; justify-content: center; gap: 12px; padding: 12px 0 0; }
-  .history-pagination span { min-width: 90px; text-align: center; }
+  .table-pagination { align-items: center; border: 0; display: flex; justify-content: center; gap: 12px; padding: 12px 0 0; }
+  .table-pagination span { min-width: 90px; text-align: center; }
   .section-title { align-items: start; display: flex; justify-content: space-between; gap: 15px; }
   .trend-state, .severity { border: 1px solid currentColor; display: inline-block; padding: 2px 7px; text-transform: capitalize; }
   .improving, .pass { color: var(--vscode-testing-iconPassed); } .degrading, .error { color: var(--vscode-testing-iconFailed); } .warning { color: var(--vscode-editorWarning-foreground); } .stable, .info { color: var(--vscode-editorInfo-foreground); } .insufficient_evidence, .unknown { color: var(--vscode-descriptionForeground); }
@@ -784,6 +790,28 @@ ${state.report ? '<nav aria-label="Metrics sections"><a href="#overview">Overvie
     }
     document.getElementById('file-filter-status').textContent = visible + ' of ' + rows.length + ' rows shown';
   });
+  const findingsSection = document.getElementById('findings');
+  const findingsRows = [...document.querySelectorAll('#findings tbody tr[data-finding-row]')];
+  const findingsPrevious = document.getElementById('findings-previous');
+  const findingsNext = document.getElementById('findings-next');
+  const findingsPageStatus = document.getElementById('findings-page-status');
+  const findingsNoResults = document.getElementById('findings-no-results');
+  const findingsPageSize = Number(findingsSection?.dataset.findingsPageSize || 10);
+  let findingsPage = 1;
+  const renderFindings = () => {
+    if (!findingsSection) return;
+    const pageCount = findingsRows.length === 0 ? 0 : Math.ceil(findingsRows.length / findingsPageSize);
+    findingsPage = pageCount === 0 ? 1 : Math.min(findingsPage, pageCount);
+    const visible = new Set(findingsRows.slice((findingsPage - 1) * findingsPageSize, findingsPage * findingsPageSize));
+    for (const row of findingsRows) row.hidden = !visible.has(row);
+    findingsNoResults.hidden = findingsRows.length !== 0;
+    findingsPageStatus.textContent = pageCount === 0 ? 'Page 0 of 0' : 'Page ' + findingsPage + ' of ' + pageCount;
+    findingsPrevious.disabled = pageCount === 0 || findingsPage === 1;
+    findingsNext.disabled = pageCount === 0 || findingsPage === pageCount;
+  };
+  findingsPrevious?.addEventListener('click', () => { findingsPage = Math.max(1, findingsPage - 1); renderFindings(); });
+  findingsNext?.addEventListener('click', () => { findingsPage += 1; renderFindings(); });
+  renderFindings();
   const historySection = document.getElementById('history');
   const historyRows = [...document.querySelectorAll('#history tbody tr[data-history-row]')];
   const historySearch = document.getElementById('history-search');
