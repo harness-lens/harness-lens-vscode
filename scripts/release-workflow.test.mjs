@@ -23,6 +23,12 @@ test("publishes only unambiguous local npm tarballs", () => {
   assert.match(workflow, /npm publish "\$\{packages\[0\]\}" --access public/);
 });
 
+test("leaves npm authentication to trusted publishing", () => {
+  assert.doesNotMatch(workflow, /registry-url:/);
+  assert.doesNotMatch(workflow, /NODE_AUTH_TOKEN/);
+  assert.match(workflow, /id-token: write/);
+});
+
 test("recovers npm from checksum-verified release assets without rebuilding", () => {
   assert.match(workflow, /recover_existing_npm:/);
   assert.match(workflow, /gh release download "\$RELEASE_TAG" --dir artifacts/);

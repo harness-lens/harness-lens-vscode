@@ -165,6 +165,12 @@ requires exactly one npm tarball, and publishes that reviewed local file. Never
 delete assets, move the tag, or substitute a locally rebuilt tarball to recover
 a registry failure.
 
+The npm publishing jobs intentionally omit `setup-node`'s `registry-url` input.
+That input writes an `_authToken` placeholder to a temporary `.npmrc`; without a
+classic npm token, the empty placeholder can prevent npm from using the GitHub
+OIDC identity configured for trusted publishing. The package's default registry
+and `publishConfig.access` still select the public npm registry.
+
 Azure DevOps global PATs retire on December 1, 2026. Keep this PAT route
 short-lived and migrate when a stable `@vscode/vsce` release supports direct
 Marketplace trusted publishing from GitHub Actions. Do not adopt a prerelease
