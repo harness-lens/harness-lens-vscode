@@ -6,7 +6,8 @@
 ## Unreleased
 
 - Fix npm release publication to use an unambiguous local tarball path and add
-  checksum-verified recovery from immutable GitHub release assets.
+  checksum-verified recovery from immutable GitHub release assets without an
+  empty token placeholder interfering with trusted publishing.
 
 ## 0.0.5
 

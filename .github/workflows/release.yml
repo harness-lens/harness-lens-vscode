@@ -334,7 +334,6 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: "24"
-          registry-url: https://registry.npmjs.org
           package-manager-cache: false
 
       - name: Install dependencies
@@ -380,7 +379,6 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: "24"
-          registry-url: https://registry.npmjs.org
           package-manager-cache: false
 
       - name: Download immutable GitHub release assets
