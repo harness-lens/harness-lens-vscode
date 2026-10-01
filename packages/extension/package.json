@@ -204,7 +204,7 @@
   },
   "dependencies": {
     "@harness-lens/vscode": "0.0.5",
-    "vscode-languageclient": "^10.1.1"
+    "vscode-languageclient": "^10.1.2"
   },
   "repository": {
     "type": "git",
